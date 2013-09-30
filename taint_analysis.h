@@ -2,7 +2,8 @@
 #define _TAINT_ANALYSIS_H
 
 #include "shadow_memory.h"
-#include "VEX/libvex.h"
+#include "pub_tool_basics.h"
+#include "pub_tool_tooliface.h"
 
 /* VEX */
 

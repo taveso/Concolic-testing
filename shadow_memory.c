@@ -1,34 +1,19 @@
 #include "shadow_memory.h"
-#include <string.h>
-#include <stdlib.h>
 
-void init()
+void init_shadow_memory(void)
 {
-    int i;
-
-    memset(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
-
-    g_tmp_map = malloc(sizeof(Temp_info*)*MAX_TEMP);
-    memset(g_tmp_map, 0, sizeof(Temp_info*)*MAX_TEMP);
-    g_tmp_map_len = 0;
+    VG_(memset)(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
 }
 
-void destroy()
+void destroy_shadow_memory(void)
 {
     int i;
 
     for (i = 0; i < MMAP_SIZE; i++) {
         if (MemoryMap[i] != NULL) {
-            free(MemoryMap[i]);
+            VG_(free)("", MemoryMap[i]);
         }
     }
-
-    for (i = 0; i < MAX_TEMP; i++) {
-        if (g_tmp_map[i] != NULL) {
-            free(g_tmp_map[i]);
-        }
-    }
-    free(g_tmp_map);
 }
 
 //
@@ -46,7 +31,7 @@ Chunk* get_chunk_for_writing(UInt addr)
 
     if (MemoryMap[x] == NULL)
     {
-        MemoryMap[x] = malloc(sizeof(Chunk));
+        MemoryMap[x] = VG_(malloc)("", sizeof(Chunk));
     }
 
     return MemoryMap[x];
@@ -163,27 +148,19 @@ void flip_register(Int offset, Int size)
 //  TEMPORARIES
 //
 
-char tmp_exists(IRTemp tmp)
+char temporary_exists(IRTemp tmp)
 {
-    return g_tmp_map[tmp] != NULL;
-}
-
-void add_tmp_to_g_map(IRTemp tmp, IRType type)
-{
-    if (!tmp_exists(tmp))
-    {
-        g_tmp_map[tmp] = malloc(sizeof(Temp_info));
-        g_tmp_map[tmp]->tmp = tmp;
-        g_tmp_map[tmp]->type = type;
-        g_tmp_map[tmp]->tainted = 0;
-
-        g_tmp_map_len++;
-    }
+    TempMapEnt* ent = (TempMapEnt*)VG_(indexXA)(g_TempMap, (Word)tmp);
+    return ent != NULL;
 }
 
 void flip_temporary(IRTemp tmp)
 {
-    if (tmp_exists(tmp)) {
-        g_tmp_map[tmp]->tainted ^= 1;
+    if (temporary_exists(tmp))
+    {
+        TempMapEnt* ent = (TempMapEnt*)VG_(indexXA)(g_TempMap, (Word)tmp);
+        ent->tainted ^= 1;
+
+        VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, ent->tainted^1, ent->tainted);
     }
 }

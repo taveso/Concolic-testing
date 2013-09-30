@@ -1,10 +1,12 @@
 #ifndef _SHADOW_MEMORY_H
 #define _SHADOW_MEMORY_H
 
-#include "VEX/libvex.h"
+#include "pub_tool_basics.h"
+#include "pub_tool_tooliface.h"
+#include "pub_tool_xarray.h"
 
-void init();
-void destroy();
+void init_shadow_memory(void);
+void destroy_shadow_memory(void);
 
 /* MEMORY */
 
@@ -42,20 +44,13 @@ void flip_register(Int offset, Int size);
 
 /* TEMPORARIES */
 
-#define	MAX_TEMP	0xffff
-
 typedef struct {
-    IRTemp tmp;
-    IRType type;
     char tainted;
-} Temp_info;
+} TempMapEnt;
 
-Temp_info** g_tmp_map;
-unsigned int g_tmp_map_len;
+XArray* /* of TempMapEnt */ g_TempMap;
 
-char tmp_exists(IRTemp tmp);
-void add_tmp_to_g_map(IRTemp tmp, IRType type);
-
+char temporary_exists(IRTemp tmp);
 void flip_temporary(IRTemp tmp);
 
 #endif // SHADOW_MEMORY_H

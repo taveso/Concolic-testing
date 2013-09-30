@@ -1,5 +1,4 @@
 #include "taint_analysis.h"
-#include <stdlib.h>
 
 //
 //  VEX
@@ -263,7 +262,13 @@ char register_is_tainted(Int offset, Int size)
 
 char temporary_is_tainted(IRTemp tmp)
 {
-    return g_tmp_map[tmp]->tainted;
+    if (temporary_exists(tmp))
+    {
+        TempMapEnt* ent = (TempMapEnt*)VG_(indexXA)(g_TempMap, (Word)tmp);
+        return ent->tainted;
+    }
+
+    return 0;
 }
 
 //
