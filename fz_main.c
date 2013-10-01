@@ -3,6 +3,7 @@
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
 #include "pub_tool_mallocfree.h"
+#include "pub_tool_libcassert.h"
 
 // #include "xed2-ia32/include/xed-interface.h"
 // gcc -o main main.c shadow_memory.c taint_analysis.c VEX/*.c -Ixed2-ia32/include -Lxed2-ia32/lib -lxed
@@ -46,7 +47,7 @@ void instrument_Put(IRStmt* st, IRTypeEnv* tyenv)
 {
     Int data_size = sizeofIRType(typeOfIRExpr(tyenv, st->Ist.Put.data));
 
-    if (register_is_tainted(st->Ist.Put.offset, data_size) != IRExpr_is_tainted(st->Ist.Put.data))
+    if (register_is_tainted(st->Ist.Put.offset, data_size) != IRAtom_is_tainted(st->Ist.Put.data))
     {
         flip_register(st->Ist.Put.offset, data_size);
     }
@@ -66,11 +67,11 @@ void instrument_WrTmp(IRStmt* st, IRTypeEnv* tyenv)
 
 void instrument_Store(IRStmt* st, IRTypeEnv* tyenv)
 {
-    UInt store_address = get_address_from_IRExpr(st->Ist.Store.addr);
     Int data_size = sizeofIRType(typeOfIRExpr(tyenv, st->Ist.Store.data));
 
-    if (memory_is_tainted(store_address, data_size) != IRExpr_is_tainted(st->Ist.Store.data)) {
-        flip_memory(store_address, data_size);
+    if (IRAtom_addr_is_tainted(st->Ist.Store.addr, data_size) != IRAtom_is_tainted(st->Ist.Store.data))
+    {
+        flip_memory(get_IRAtom_addr(st->Ist.Store.addr), data_size);
     }
 }
 
@@ -78,12 +79,12 @@ void instrument_CAS(IRStmt* st, IRTypeEnv* tyenv)
 {
     IRCAS* cas = st->Ist.CAS.details;
 
-    // tl_assert(cas->addr != NULL); //
-    // tl_assert(cas->dataLo != NULL); //
+    tl_assert(cas->addr != NULL);
+    tl_assert(cas->dataLo != NULL);
 
     char is_double_element_cas = cas->dataHi != NULL;
 
-    UInt store_address = get_address_from_IRExpr(cas->addr);
+    UInt store_address = get_IRAtom_addr(cas->addr);
 
     Int data_size = sizeofIRType(typeOfIRExpr(tyenv, cas->dataLo));
     if (is_double_element_cas)
@@ -108,7 +109,7 @@ void instrument_LLSC(IRStmt* st, IRTypeEnv* tyenv)
     // Load-Linked
     if (st->Ist.LLSC.storedata == NULL)
     {
-        UInt load_address = get_address_from_IRExpr(st->Ist.LLSC.addr);
+        UInt load_address = get_IRAtom_addr(st->Ist.LLSC.addr);
         Int data_size = sizeofIRType(typeOfIRTemp(tyenv, st->Ist.LLSC.result));
 
         if (temporary_is_tainted(st->Ist.LLSC.result) != memory_is_tainted(load_address, data_size)) {
@@ -118,22 +119,24 @@ void instrument_LLSC(IRStmt* st, IRTypeEnv* tyenv)
     // Store-Conditional
     else
     {
-        char store_succeeded = st->Ist.LLSC.result == 1;
-        if (store_succeeded)
-        {
-            UInt store_address = get_address_from_IRExpr(st->Ist.LLSC.addr);
+//        char store_succeeded = st->Ist.LLSC.result == 1;
+//        if (store_succeeded)
+//        {
+            UInt store_address = get_IRAtom_addr(st->Ist.LLSC.addr);
             Int data_size = sizeofIRType(typeOfIRExpr(tyenv, st->Ist.LLSC.storedata));
 
             if (memory_is_tainted(store_address, data_size) != IRExpr_is_tainted(st->Ist.LLSC.storedata)) {
                 flip_memory(store_address, data_size);
             }
-        }
+//        }
     }
 }
 
 void instrument_Exit(IRStmt* st)
 {
-    if (st->Ist.Exit.guard) // IRType only RdTmp ?
+    tl_assert(st->Ist.Exit.guard->tag == Iex_RdTmp);
+
+    if (st->Ist.Exit.guard) // if <guard> is true // TODO: st->Ist.Exit.guard value ?
     {
         Int data_size = sizeofIRType(typeOfIRConst(st->Ist.Exit.dst));
 
@@ -159,7 +162,7 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
 
     if (gWordTy != hWordTy) {
         /* We don't currently support this case. */
-        // VG_(tool_panic)("host/guest word size mismatch");
+        VG_(tool_panic)("host/guest word size mismatch");
     }
 
     g_TempMap = VG_(newXA)(VG_(malloc), "", VG_(free), sizeof(TempMapEnt));
@@ -180,7 +183,6 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
         IRStmt* st = irsb->stmts[i];
         if (!st)
             continue;
-        // tl_assert(st); //
 
         switch (st->tag)
         {
