@@ -57,9 +57,9 @@ void instrument_PutI()
 {
 }
 
-void instrument_WrTmp(IRStmt* st, IRTypeEnv* tyenv)
+void instrument_WrTmp(IRStmt* st, IRSB* bb)
 {
-    if (temporary_is_tainted(st->Ist.WrTmp.tmp) != IRExpr_is_tainted(st->Ist.WrTmp.data))
+    if (temporary_is_tainted(st->Ist.WrTmp.tmp) != IRExpr_is_tainted(st->Ist.WrTmp.data, bb))
     {
         flip_temporary(st->Ist.WrTmp.tmp);
     }
@@ -75,7 +75,7 @@ void instrument_Store(IRStmt* st, IRTypeEnv* tyenv)
     }
 }
 
-void instrument_CAS(IRStmt* st, IRTypeEnv* tyenv)
+void instrument_CAS(IRStmt* st, IRSB* bb)
 {
     IRCAS* cas = st->Ist.CAS.details;
 
@@ -86,31 +86,31 @@ void instrument_CAS(IRStmt* st, IRTypeEnv* tyenv)
 
     UInt store_address = get_IRAtom_addr(cas->addr);
 
-    Int data_size = sizeofIRType(typeOfIRExpr(tyenv, cas->dataLo));
+    Int data_size = sizeofIRType(typeOfIRExpr(bb->tyenv, cas->dataLo));
     if (is_double_element_cas)
         data_size *= 2;
 
     if (is_double_element_cas)
     {
-        if (memory_is_tainted(store_address, data_size) != (IRExpr_is_tainted(cas->dataLo) || IRExpr_is_tainted(cas->dataHi))) {
+        if (memory_is_tainted(store_address, data_size) != (IRExpr_is_tainted(cas->dataLo, bb) || IRExpr_is_tainted(cas->dataHi, bb))) {
             flip_memory(store_address, data_size);
         }
     }
     else
     {
-        if (memory_is_tainted(store_address, data_size) != IRExpr_is_tainted(cas->dataLo)) {
+        if (memory_is_tainted(store_address, data_size) != IRExpr_is_tainted(cas->dataLo, bb)) {
             flip_memory(store_address, data_size);
         }
     }
 }
 
-void instrument_LLSC(IRStmt* st, IRTypeEnv* tyenv)
+void instrument_LLSC(IRStmt* st, IRSB* bb)
 {
     // Load-Linked
     if (st->Ist.LLSC.storedata == NULL)
     {
         UInt load_address = get_IRAtom_addr(st->Ist.LLSC.addr);
-        Int data_size = sizeofIRType(typeOfIRTemp(tyenv, st->Ist.LLSC.result));
+        Int data_size = sizeofIRType(typeOfIRTemp(bb->tyenv, st->Ist.LLSC.result));
 
         if (temporary_is_tainted(st->Ist.LLSC.result) != memory_is_tainted(load_address, data_size)) {
             flip_temporary(st->Ist.LLSC.result);
@@ -123,9 +123,9 @@ void instrument_LLSC(IRStmt* st, IRTypeEnv* tyenv)
 //        if (store_succeeded)
 //        {
             UInt store_address = get_IRAtom_addr(st->Ist.LLSC.addr);
-            Int data_size = sizeofIRType(typeOfIRExpr(tyenv, st->Ist.LLSC.storedata));
+            Int data_size = sizeofIRType(typeOfIRExpr(bb->tyenv, st->Ist.LLSC.storedata));
 
-            if (memory_is_tainted(store_address, data_size) != IRExpr_is_tainted(st->Ist.LLSC.storedata)) {
+            if (memory_is_tainted(store_address, data_size) != IRExpr_is_tainted(st->Ist.LLSC.storedata, bb)) {
                 flip_memory(store_address, data_size);
             }
 //        }
@@ -153,12 +153,13 @@ static void fz_post_clo_init(void)
 
 static
 IRSB* fz_instrument ( VgCallbackClosure* closure,
-                      IRSB* irsb,
+                      IRSB* bb_in,
                       VexGuestLayout* layout,
                       VexGuestExtents* vge,
                       IRType gWordTy, IRType hWordTy )
 {
     Int i;
+    IRSB* bb_out;
 
     if (gWordTy != hWordTy) {
         /* We don't currently support this case. */
@@ -166,26 +167,30 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
     }
 
     g_TempMap = VG_(newXA)(VG_(malloc), "", VG_(free), sizeof(TempMapEnt));
-    for (i = 0; i < irsb->tyenv->types_used; i++) {
+    for (i = 0; i < bb_in->tyenv->types_used; i++) {
         TempMapEnt ent;
         ent.tainted = 0;
         VG_(addToXA)(g_TempMap, &ent);
     }
 
+    bb_out = deepCopyIRSBExceptStmts(bb_in);
+
     // ignore any IR preamble preceding the first IMark
     i = 0;
-    while (i < irsb->stmts_used && irsb->stmts[i]->tag != Ist_IMark) {
+    while (i < bb_in->stmts_used && bb_in->stmts[i]->tag != Ist_IMark) {
+        addStmtToIRSB(bb_out, bb_in->stmts[i]);
         i++;
     }
 
-    for (/*use current i*/; i < irsb->stmts_used; i++)
+    for (/*use current i*/; i < bb_in->stmts_used; i++)
     {
-        IRStmt* st = irsb->stmts[i];
+        IRStmt* st = bb_in->stmts[i];
         if (!st)
             continue;
 
         switch (st->tag)
         {
+            /*
             case Ist_NoOp:
             case Ist_IMark:
             case Ist_AbiHint:
@@ -194,36 +199,45 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
                 break;
 
             case Ist_Put:
-                instrument_Put(st, irsb->tyenv);
+                instrument_Put(st, bb_out->tyenv);
                 break;
             case Ist_PutI:
                 // TODO
                 break;
             case Ist_WrTmp:
-                instrument_WrTmp(st, irsb->tyenv);
+                instrument_WrTmp(st, bb_out);
                 break;
             case Ist_Store:
-                instrument_Store(st, irsb->tyenv);
+                instrument_Store(st, bb_out->tyenv);
                 break;
             case Ist_CAS:
-                instrument_CAS(st, irsb->tyenv);
+                instrument_CAS(st, bb_out);
                 break;
             case Ist_LLSC:
-                instrument_LLSC(st, irsb->tyenv);
+                instrument_LLSC(st, bb_out);
                 break;
             case Ist_Exit:
                 // TODO
                 break;
+            */
+
+            case Ist_WrTmp:
+                instrument_WrTmp(st, bb_out);
+                break;
         }
+
+        addStmtToIRSB(bb_out, st);
+        ppIRStmt(st);
+        VG_(printf)("\n");
     }
 
     /* */
 
-    // ppIRSB(irsb);
+    // ppIRSB(bb_in);
 
     VG_(deleteXA)(g_TempMap);
 
-    return irsb;
+    return bb_out;
 }
 
 static void fz_fini(Int exitcode)

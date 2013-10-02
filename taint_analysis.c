@@ -1,11 +1,13 @@
 #include "taint_analysis.h"
 #include "pub_tool_libcassert.h"
+#include "pub_tool_machine.h"
+#include "pub_tool_tooliface.h"
 
 //
 //  VEX
 //
 
-char IRExpr_is_tainted(IRExpr* expr)
+char IRExpr_is_tainted(IRExpr* expr, IRSB* bb)
 {
     switch (expr->tag)
     {
@@ -32,8 +34,7 @@ char IRExpr_is_tainted(IRExpr* expr)
             // TODO
             return 0;
         case Iex_Mux0X:
-            // TODO
-            return 0;
+            return Mux0X_is_tainted(expr, bb);
     }
 }
 
@@ -83,12 +84,46 @@ char IRAtom_addr_is_tainted(IRExpr* expr, Int size)
     return memory_is_tainted(addr, size);
 }
 
-char Mux0X_is_tainted(IRExpr* expr)
+static VG_REGPARM(0) void helper_Mux0X_is_tainted(UInt cond_value, UInt expr0, UInt exprX)
 {
-    tl_assert(expr->Iex.Mux0X.cond->tag == Iex_RdTmp);
+    VG_(printf)("helper_Mux0X: cond: %u - expr0: %u - exprX: %u\n", cond_value, expr0, exprX);
+}
 
-    tl_assert(isIRAtom(expr->Iex.Mux0X.expr0));
-    tl_assert(isIRAtom(expr->Iex.Mux0X.exprX));
+char Mux0X_is_tainted(IRExpr* expr, IRSB* bb)
+{
+    // ppIRType(typeOfIRExpr(bb->tyenv, expr->Iex.Mux0X.cond)); // Ity_I8
+
+    IRExpr* cond = expr->Iex.Mux0X.cond;
+    IRExpr* expr0 = expr->Iex.Mux0X.expr0;
+    IRExpr* exprX = expr->Iex.Mux0X.exprX;
+
+    tl_assert(cond->tag == Iex_RdTmp);
+
+    tl_assert(isIRAtom(expr0));
+    tl_assert(isIRAtom(exprX));
+
+    IRTemp t = newIRTemp(bb->tyenv, Ity_I32);
+    IRStmt* st = IRStmt_WrTmp(t, IRExpr_Unop(Iop_8Uto32, cond));
+    addStmtToIRSB(bb, st);
+    ppIRStmt(st);
+    VG_(printf)("HERE \n");
+    cond = IRExpr_RdTmp(t); // in: IRTemp / out: IRExpr*
+
+    TempMapEnt ent;
+    ent.tainted = 0;
+    VG_(addToXA)(g_TempMap, &ent);
+
+    addStmtToIRSB(bb,
+        IRStmt_Dirty(
+            unsafeIRDirty_0_N(0,
+                              "helper_Mux0X_is_tainted",
+                              VG_(fnptr_to_fnentry)(helper_Mux0X_is_tainted),
+                              mkIRExprVec_3(cond,
+                                            mkIRExpr_HWord((expr0->tag == Iex_RdTmp) ? expr0->Iex.RdTmp.tmp : IRTemp_INVALID),
+                                            mkIRExpr_HWord((exprX->tag == Iex_RdTmp) ? exprX->Iex.RdTmp.tmp : IRTemp_INVALID)
+                                            ))));
+
+    return 0;
 }
 
 //

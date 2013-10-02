@@ -7,12 +7,12 @@
 
 /* VEX */
 
-char IRExpr_is_tainted(IRExpr* expr);
+char IRExpr_is_tainted(IRExpr* expr, IRSB* bb);
 char Get_is_tainted(IRExpr* expr);
 char Unop_is_tainted(IRExpr* expr);
 char Binop_is_tainted(IRExpr* expr);
 char Load_is_tainted(IRExpr* expr);
-char Mux0X_is_tainted(IRExpr* expr);
+char Mux0X_is_tainted(IRExpr* expr, IRSB* bb);
 
 char IRAtom_is_tainted(IRExpr* expr);
 char IRAtom_addr_is_tainted(IRExpr* expr, Int size);
