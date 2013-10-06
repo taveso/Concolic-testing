@@ -1,8 +1,13 @@
 #include "shadow_memory.h"
+#include "pub_tool_libcprint.h"     // VG_(printf)
+#include "pub_tool_libcbase.h"      // VG_(memset)
+#include "pub_tool_mallocfree.h"    // VG_(malloc) VG_(free)
 
 void init_shadow_memory(void)
 {
     VG_(memset)(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
+
+    VG_(memset)(g_ShadowTempArray, 0, sizeof(char)*MAX_TEMPORARIES_IN_IRSB);
 }
 
 void destroy_shadow_memory(void)
@@ -11,7 +16,7 @@ void destroy_shadow_memory(void)
 
     for (i = 0; i < MMAP_SIZE; i++) {
         if (MemoryMap[i] != NULL) {
-            VG_(free)("", MemoryMap[i]);
+            VG_(free)(MemoryMap[i]);
         }
     }
 }
@@ -148,19 +153,17 @@ void flip_register(Int offset, Int size)
 //  TEMPORARIES
 //
 
-char temporary_exists(IRTemp tmp)
+char shadow_tmp_exists(IRTemp tmp)
 {
-    TempMapEnt* ent = (TempMapEnt*)VG_(indexXA)(g_TempMap, (Word)tmp);
-    return ent != NULL;
+    return MAX_TEMPORARIES_IN_IRSB > tmp;
 }
 
 void flip_temporary(IRTemp tmp)
 {
-    if (temporary_exists(tmp))
+    if (shadow_tmp_exists(tmp))
     {
-        TempMapEnt* ent = (TempMapEnt*)VG_(indexXA)(g_TempMap, (Word)tmp);
-        ent->tainted ^= 1;
+        g_ShadowTempArray[tmp] ^= 1;
 
-        VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, ent->tainted^1, ent->tainted);
+        VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, g_ShadowTempArray[tmp]^1, g_ShadowTempArray[tmp]);
     }
 }

@@ -3,7 +3,6 @@
 
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
-#include "pub_tool_xarray.h"
 
 void init_shadow_memory(void);
 void destroy_shadow_memory(void);
@@ -44,11 +43,10 @@ void flip_register(Int offset, Int size);
 
 /* TEMPORARIES */
 
-typedef struct {
-    char tainted;
-} TempMapEnt;
+#define MAX_TEMPORARIES_IN_IRSB 64
 
-XArray* /* of TempMapEnt */ g_TempMap;
+// A temporary is written before being read
+char g_ShadowTempArray[MAX_TEMPORARIES_IN_IRSB];
 
 char temporary_exists(IRTemp tmp);
 void flip_temporary(IRTemp tmp);
