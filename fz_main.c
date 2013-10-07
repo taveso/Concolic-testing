@@ -207,6 +207,22 @@ void instrument_WrTmp_Get(IRSB* sb_out, IRTemp tmp, IRExpr* data)
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
+/*
+    The GetI expression is used to read guest registers which identity is not known until run time,
+    i.e. not general-purpose registers and instruction pointer (in principle),
+    no harm in verifying though.
+*/
+void instrument_WrTmp_GetI(IRExpr* data)
+{
+    IRRegArray* descr = data->Iex.GetI.descr;
+    Int start_of_indexed_area = descr->base;
+    Int end_of_indexed_area = descr->base+sizeofIRType(descr->elemTy)*descr->nElems;
+
+    // general-purpose registers and instruction pointer
+    if (start_of_indexed_area <= 68 && end_of_indexed_area >= 8) {
+        VG_(tool_panic)("instrument_WrTmp_GetI");
+    }
+}
 void instrument_WrTmp_RdTmp(IRSB* sb_out, IRTemp tmp, IRExpr* data)
 {
     IRTemp rhs = data->Iex.RdTmp.tmp;
@@ -332,13 +348,15 @@ void instrument_WrTmp(IRStmt* st, IRSB* sb_out)
     {
         case Iex_Binder:
         // we don't care about floating point and SIMD operations
-        case Iex_GetI:
         case Iex_Qop:
         case Iex_Triop:
             break;
 
         case Iex_Get:
             instrument_WrTmp_Get(sb_out, tmp, data);
+            break;
+        case Iex_GetI:
+            instrument_WrTmp_GetI(data);
             break;
         case Iex_RdTmp:
             instrument_WrTmp_RdTmp(sb_out, tmp, data);
