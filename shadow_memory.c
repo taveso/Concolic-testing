@@ -7,14 +7,19 @@ void init_shadow_memory(void)
 {
     VG_(memset)(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
 
-    VG_(memset)(g_ShadowTempArray, 0, sizeof(char)*MAX_TEMPORARIES_IN_IRSB);
+    VG_(memset)(registers8, 0, 9);
+    VG_(memset)(registers16, 0, 9);
+    VG_(memset)(registers32, 0, 9);
+
+    VG_(memset)(g_ShadowTempArray, 0, MAX_TEMPORARIES);
 }
 
 void destroy_shadow_memory(void)
 {
     int i;
 
-    for (i = 0; i < MMAP_SIZE; i++) {
+    for (i = 0; i < MMAP_SIZE; i++)
+    {
         if (MemoryMap[i] != NULL) {
             VG_(free)(MemoryMap[i]);
         }
@@ -37,6 +42,7 @@ Chunk* get_chunk_for_writing(UInt addr)
     if (MemoryMap[x] == NULL)
     {
         MemoryMap[x] = VG_(malloc)("", sizeof(Chunk));
+        VG_(memset)(MemoryMap[x], 0, sizeof(Chunk));
     }
 
     return MemoryMap[x];
@@ -57,22 +63,43 @@ void flip_word(UInt addr)
 
 void flip_dword(UInt addr)
 {
-    flip_byte(addr);
-    flip_byte(addr+1);
-    flip_byte(addr+2);
-    flip_byte(addr+3);
+    flip_word(addr);
+    flip_word(addr+2);
 }
 
-void flip_memory(UInt addr, Int size)
+void flip_qword(UInt addr)
+{
+    flip_dword(addr);
+    flip_dword(addr+4);
+}
+
+void flip_dqword(UInt addr)
+{
+    flip_qword(addr);
+    flip_qword(addr+8);
+}
+
+void flip_memory(UInt addr, UInt size)
 {
     switch (size)
     {
         case 1:
             flip_byte(addr);
+            break;
         case 2:
             flip_word(addr);
+            break;
         case 4:
             flip_dword(addr);
+            break;
+        case 8:
+            flip_qword(addr);
+            break;
+        case 16:
+            flip_dqword(addr);
+            break;
+        default:
+            VG_(tool_panic)("flip_memory");
     }
 }
 
@@ -80,7 +107,7 @@ void flip_memory(UInt addr, Int size)
 //  REGISTERS
 //
 
-Register get_reg_from_offset(Int offset)
+Register get_reg_from_offset(UInt offset)
 {
     switch (offset)
     {
@@ -128,7 +155,7 @@ void flip_register32(Register reg)
     }
 }
 
-void flip_register(Int offset, Int size)
+void flip_register(UInt offset, UInt size)
 {
     Register reg = get_reg_from_offset(offset);
 
@@ -146,6 +173,8 @@ void flip_register(Int offset, Int size)
         case 4:
             flip_register32(reg);
             break;
+        default:
+            VG_(tool_panic)("flip_register");
     }
 }
 
@@ -155,7 +184,7 @@ void flip_register(Int offset, Int size)
 
 char shadow_tmp_exists(IRTemp tmp)
 {
-    return MAX_TEMPORARIES_IN_IRSB > tmp;
+    return MAX_TEMPORARIES > tmp;
 }
 
 void flip_temporary(IRTemp tmp)
@@ -166,4 +195,6 @@ void flip_temporary(IRTemp tmp)
 
         VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, g_ShadowTempArray[tmp]^1, g_ShadowTempArray[tmp]);
     }
+    else
+        VG_(tool_panic)("flip_temporary");
 }

@@ -24,7 +24,9 @@ Chunk* get_chunk_for_writing(UInt addr);
 void flip_byte(UInt addr);
 void flip_word(UInt addr);
 void flip_dword(UInt addr);
-void flip_memory(UInt addr, Int size);
+void flip_qword(UInt addr);
+void flip_dqword(UInt addr);
+void flip_memory(UInt addr, UInt size);
 
 /* REGISTERS */
 
@@ -34,21 +36,20 @@ char registers8[9];
 char registers16[9];
 char registers32[9];
 
-Register get_reg_from_offset(Int offset);
+Register get_reg_from_offset(UInt offset);
 
 void flip_register8(Register reg);
 void flip_register16(Register reg);
 void flip_register32(Register reg);
-void flip_register(Int offset, Int size);
+void flip_register(UInt offset, UInt size);
 
 /* TEMPORARIES */
 
-#define MAX_TEMPORARIES_IN_IRSB 64
+#define MAX_TEMPORARIES 512
 
-// A temporary is written before being read
-char g_ShadowTempArray[MAX_TEMPORARIES_IN_IRSB];
+char g_ShadowTempArray[MAX_TEMPORARIES]; // a temporary is written before being read
 
-char temporary_exists(IRTemp tmp);
+char shadow_tmp_exists(IRTemp tmp);
 void flip_temporary(IRTemp tmp);
 
 #endif // SHADOW_MEMORY_H
