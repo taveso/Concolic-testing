@@ -176,8 +176,21 @@ void instrument_Put(IRStmt* st, IRSB* sb_out)
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_PutI(void)
+/*
+    The PutI statement is used to write guest registers which identity is not known until run time,
+    i.e. not general-purpose registers and instruction pointer (in principle),
+    no harm in verifying though.
+*/
+void instrument_PutI(IRStmt* st)
 {
+    IRRegArray* descr = st->Ist.PutI.details->descr;
+    Int start_of_indexed_area = descr->base;
+    Int end_of_indexed_area = descr->base+sizeofIRType(descr->elemTy)*descr->nElems;
+
+    // general-purpose registers and instruction pointer
+    if (start_of_indexed_area <= 68 && end_of_indexed_area >= 8) {
+        VG_(tool_panic)("instrument_PutI");
+    }
 }
 void instrument_WrTmp_Get(IRSB* sb_out, IRTemp tmp, IRExpr* data)
 {
@@ -343,7 +356,9 @@ void instrument_WrTmp(IRStmt* st, IRSB* sb_out)
             instrument_WrTmp_Const(sb_out, tmp, data);
             break;
         case Iex_CCall:
-            // TODO
+            // ppIRStmt(st);
+            // VG_(printf)("\n");
+            // TODO Iex_CCall
             break;
         case Iex_Mux0X:
             instrument_WrTmp_Mux0X(sb_out, tmp, data);
@@ -617,7 +632,7 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
                 instrument_Put(st, sb_out);
                 break;
             case Ist_PutI:
-                // TODO
+                instrument_PutI(st);
                 break;
             case Ist_WrTmp:
                 instrument_WrTmp(st, sb_out);
