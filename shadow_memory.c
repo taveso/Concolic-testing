@@ -11,7 +11,7 @@ void init_shadow_memory(void)
     VG_(memset)(registers16, 0, 9);
     VG_(memset)(registers32, 0, 9);
 
-    VG_(memset)(g_ShadowTempArray, 0, MAX_TEMPORARIES);
+    VG_(memset)(shadowTempArray, 0, MAX_TEMPORARIES);
 }
 
 void destroy_shadow_memory(void)
@@ -136,8 +136,8 @@ void flip_register16(Register reg)
     // EAX ECX EDX EBX
     if (reg < 4)
     {
-        registers8[reg] = registers16[reg];		// low-order byte
-        registers8[reg+4] = registers16[reg];	// high-order byte
+        registers8[reg] = registers16[reg];     // low-order byte
+        registers8[reg+4] = registers16[reg];   // high-order byte
     }
 }
 
@@ -150,8 +150,8 @@ void flip_register32(Register reg)
     // EAX ECX EDX EBX
     if (reg < 4)
     {
-        registers8[reg] = registers32[reg];		// low-order byte
-        registers8[reg+4] = registers32[reg];	// high-order byte
+        registers8[reg] = registers32[reg];     // low-order byte
+        registers8[reg+4] = registers32[reg];   // high-order byte
     }
 }
 
@@ -191,9 +191,9 @@ void flip_temporary(IRTemp tmp)
 {
     if (shadow_tmp_exists(tmp))
     {
-        g_ShadowTempArray[tmp] ^= 1;
+        shadowTempArray[tmp] ^= 1;
 
-        VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, g_ShadowTempArray[tmp]^1, g_ShadowTempArray[tmp]);
+        VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, shadowTempArray[tmp]^1, shadowTempArray[tmp]);
     }
     else
         VG_(tool_panic)("flip_temporary");

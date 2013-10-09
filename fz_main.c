@@ -4,9 +4,12 @@
 #include "pub_tool_tooliface.h"
 #include "pub_tool_libcassert.h"    // tl_assert()
 #include "pub_tool_libcprint.h"     // VG_(printf)
-#include "pub_tool_mallocfree.h"    // VG_(malloc) VG_(free)
 #include "pub_tool_machine.h"       // VG_(fnptr_to_fnentry)
 
+/*
+    Bind the given expression to a new temporary, and return the temporary.
+    This effectively converts an arbitrary expression into an IRAtom.
+*/
 static IRExpr* assignNew(IRSB* sb_out, IRExpr* expr)
 {
     IRTemp tmp = newIRTemp(sb_out->tyenv, typeOfIRExpr(sb_out->tyenv, expr));
@@ -15,7 +18,6 @@ static IRExpr* assignNew(IRSB* sb_out, IRExpr* expr)
 
     return IRExpr_RdTmp(tmp);
 }
-
 static IRExpr* assignNew_HWord(IRSB* sb_out, IRExpr* expr)
 {
     IRTemp tmp = newIRTemp(sb_out->tyenv, Ity_I32);
@@ -41,13 +43,32 @@ static IRExpr* assignNew_HWord(IRSB* sb_out, IRExpr* expr)
     return IRExpr_RdTmp(tmp);
 }
 
-static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt size)
-{
-    // VG_(printf)("helper_instrument_Put: offset: %u - data: %u - size: %u\n", offset, data, size);
+//
+//  TAINT ANALYSIS DIRTY HELPERS
+//
 
+static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt size) //
+{
     if (register_is_tainted(offset, size) != IRTemp_is_tainted(data))
     {
         flip_register(offset, size);
+    }
+}
+static VG_REGPARM(0) void helper_instrument_PutI(UInt base, UInt ix, UInt bias, UInt nElems) //
+{
+    UInt index = base+((ix+bias)%nElems);
+    switch (index)
+    {
+        case 8:     // EAX
+        case 12:    // ECX
+        case 16:    // EDX
+        case 20:    // EBX
+        case 24:    // ESP
+        case 28:    // EBP
+        case 32:    // ESI
+        case 38:    // EDI
+        case 68:    // EIP
+            VG_(tool_panic)("helper_instrument_PutI");
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, UInt size) //
@@ -57,11 +78,28 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, U
         flip_temporary(tmp);
     }
 }
-static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp lhs, IRTemp rhs) //
+static VG_REGPARM(0) void helper_instrument_WrTmp_GetI(UInt base, UInt ix, UInt bias, UInt nElems) //
 {
-    if (temporary_is_tainted(lhs) != temporary_is_tainted(rhs))
+    UInt index = base+((ix+bias)%nElems);
+    switch (index)
     {
-        flip_temporary(lhs);
+        case 8:     // EAX
+        case 12:    // ECX
+        case 16:    // EDX
+        case 20:    // EBX
+        case 24:    // ESP
+        case 28:    // EBP
+        case 32:    // ESI
+        case 38:    // EDI
+        case 68:    // EIP
+            VG_(tool_panic)("helper_instrument_WrTmp_GetI");
+    }
+}
+static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp tmp_lhs, IRTemp tmp_rhs) //
+{
+    if (temporary_is_tainted(tmp_lhs) != temporary_is_tainted(tmp_rhs))
+    {
+        flip_temporary(tmp_lhs);
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1, IRTemp arg2) //
@@ -109,48 +147,15 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Mux0X(IRTemp tmp, UInt cond, I
         }
     }
 }
-static VG_REGPARM(0) void helper_instrument_Store(UInt addr, IRTemp data, UInt size)
+static VG_REGPARM(0) void helper_instrument_Store(UInt addr, IRTemp data, UInt size) //
 {
     if (memory_is_tainted(addr, size) != IRTemp_is_tainted(data))
     {
         flip_memory(addr, size);
     }
 }
-static VG_REGPARM(0) void helper_instrument_LLSC_Load_Linked(IRTemp result, UInt addr, UInt size)
+static VG_REGPARM(0) void helper_instrument_CAS_single_element(UInt addr, IRTemp dataLo, UInt size, UInt cas_succeeded) //
 {
-    if (temporary_is_tainted(result) != memory_is_tainted(addr, size))
-    {
-        flip_temporary(result);
-    }
-}
-static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IRTemp storedata, UInt size, UInt store_succeeded)
-{
-   VG_(printf)("helper_instrument_LLSC_Store_Conditional(): store_succeeded: %d\n", store_succeeded);
-
-    if (store_succeeded)
-    {
-        if (memory_is_tainted(addr, size) != IRTemp_is_tainted(storedata))
-        {
-            flip_memory(addr, size);
-        }
-    }
-}
-static VG_REGPARM(0) void helper_instrument_Exit(UInt guard, UInt offsIP, UInt size)
-{
-    // VG_(printf)("helper_instrument_Exit(): guard: %d\n", guard);
-
-    if (guard)
-    {
-        if (register_is_tainted(offsIP, size))
-        {
-            flip_register(offsIP, size);
-        }
-    }
-}
-static VG_REGPARM(0) void helper_instrument_CAS_single_element(UInt addr, IRTemp dataLo, UInt size, UInt cas_succeeded)
-{
-    // VG_(printf)("helper_instrument_CAS_single_element(): cas_succeeded: %u\n", cas_succeeded);
-
     if (cas_succeeded)
     {
         if (memory_is_tainted(addr, size) != IRTemp_is_tainted(dataLo))
@@ -159,10 +164,9 @@ static VG_REGPARM(0) void helper_instrument_CAS_single_element(UInt addr, IRTemp
         }
     }
 }
-static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp dataLo, IRTemp dataHi, UInt size, UInt oldLo_succeeded, UInt oldHi_succeeded)
+static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp dataLo, IRTemp dataHi, UInt size, UInt oldLo_succeeded, UInt oldHi_succeeded) //
 {
     char cas_succeeded = oldLo_succeeded && oldHi_succeeded;
-    VG_(printf)("helper_instrument_CAS_double_element(): cas_succeeded: %d\n", cas_succeeded);
 
     if (cas_succeeded)
     {
@@ -177,8 +181,39 @@ static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp
         }
     }
 }
+static VG_REGPARM(0) void helper_instrument_LLSC_Load_Linked(IRTemp result, UInt addr, UInt size) //
+{
+    if (temporary_is_tainted(result) != memory_is_tainted(addr, size))
+    {
+        flip_temporary(result);
+    }
+}
+static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IRTemp storedata, UInt size, UInt store_succeeded) //
+{
+    if (store_succeeded)
+    {
+        if (memory_is_tainted(addr, size) != IRTemp_is_tainted(storedata))
+        {
+            flip_memory(addr, size);
+        }
+    }
+}
+static VG_REGPARM(0) void helper_instrument_Exit(UInt guard, UInt offsIP, UInt size) //
+{
+    if (guard)
+    {
+        if (register_is_tainted(offsIP, size))
+        {
+            flip_register(offsIP, size);
+        }
+    }
+}
 
-void instrument_Put(IRStmt* st, IRSB* sb_out)
+//
+//  VEX INSTRUMENTATION FUNCTIONS
+//
+
+void instrument_Put(IRStmt* st, IRSB* sb_out) //
 {
     Int offset = st->Ist.Put.offset;
     IRExpr* data = st->Ist.Put.data;
@@ -201,19 +236,32 @@ void instrument_Put(IRStmt* st, IRSB* sb_out)
     i.e. not general-purpose registers and instruction pointer (in principle),
     no harm in verifying though.
 */
-void instrument_PutI(IRStmt* st)
+void instrument_PutI(IRStmt* st, IRSB* sb_out) //
 {
-    IRRegArray* descr = st->Ist.PutI.details->descr;
-    Int start_of_indexed_area = descr->base;
-    Int end_of_indexed_area = descr->base+sizeofIRType(descr->elemTy)*descr->nElems;
+    IRPutI* details = st->Ist.PutI.details;
+    IRRegArray* descr = details->descr;
+    Int base = descr->base;
+    Int nElems = descr->nElems;
+    IRExpr* ix = details->ix;
+    Int bias = details->bias;
+    IRDirty* di;
 
-    // general-purpose registers and instruction pointer
-    if (start_of_indexed_area <= 68 && end_of_indexed_area >= 8) {
-        VG_(tool_panic)("instrument_PutI");
-    }
+    tl_assert(ix->tag == Iex_RdTmp);
+
+    di = unsafeIRDirty_0_N(0,
+                           "helper_instrument_PutI",
+                           VG_(fnptr_to_fnentry)(helper_instrument_PutI),
+                           mkIRExprVec_4(mkIRExpr_HWord(base),
+                                         assignNew_HWord(sb_out, ix),
+                                         mkIRExpr_HWord(bias),
+                                         mkIRExpr_HWord(nElems))
+                           );
+    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp_Get(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_Get(IRStmt* st, IRSB* sb_out) //
 {
+    IRTemp tmp = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
     Int offset = data->Iex.Get.offset;
     Int size = sizeofIRType(data->Iex.Get.ty);
     IRDirty* di;
@@ -232,32 +280,47 @@ void instrument_WrTmp_Get(IRSB* sb_out, IRTemp tmp, IRExpr* data)
     i.e. not general-purpose registers and instruction pointer (in principle),
     no harm in verifying though.
 */
-void instrument_WrTmp_GetI(IRExpr* data)
+void instrument_WrTmp_GetI(IRStmt* st, IRSB* sb_out) //
 {
+    IRExpr* data = st->Ist.WrTmp.data;
     IRRegArray* descr = data->Iex.GetI.descr;
-    Int start_of_indexed_area = descr->base;
-    Int end_of_indexed_area = descr->base+sizeofIRType(descr->elemTy)*descr->nElems;
+    Int base = descr->base;
+    Int nElems = descr->nElems;
+    IRExpr* ix = data->Iex.GetI.ix;
+    Int bias = data->Iex.GetI.bias;
+    IRDirty* di;
 
-    // general-purpose registers and instruction pointer
-    if (start_of_indexed_area <= 68 && end_of_indexed_area >= 8) {
-        VG_(tool_panic)("instrument_WrTmp_GetI");
-    }
+    tl_assert(ix->tag == Iex_RdTmp);
+
+    di = unsafeIRDirty_0_N(0,
+                           "helper_instrument_WrTmp_GetI",
+                           VG_(fnptr_to_fnentry)(helper_instrument_WrTmp_GetI),
+                           mkIRExprVec_4(mkIRExpr_HWord(base),
+                                         assignNew_HWord(sb_out, ix),
+                                         mkIRExpr_HWord(bias),
+                                         mkIRExpr_HWord(nElems))
+                           );
+    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp_RdTmp(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_RdTmp(IRStmt* st, IRSB* sb_out) //
 {
-    IRTemp rhs = data->Iex.RdTmp.tmp;
+    IRTemp tmp_lhs = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
+    IRTemp tmp_rhs = data->Iex.RdTmp.tmp;
     IRDirty* di;
 
     di = unsafeIRDirty_0_N(0,
                            "helper_instrument_WrTmp_RdTmp",
                            VG_(fnptr_to_fnentry)(helper_instrument_WrTmp_RdTmp),
-                           mkIRExprVec_2(mkIRExpr_HWord(tmp),
-                                         mkIRExpr_HWord(rhs))
+                           mkIRExprVec_2(mkIRExpr_HWord(tmp_lhs),
+                                         mkIRExpr_HWord(tmp_rhs))
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp_Binop(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_Binop(IRStmt* st, IRSB* sb_out) //
 {
+    IRTemp tmp = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
     IROp op = data->Iex.Binop.op;
     IRExpr* arg1 = data->Iex.Binop.arg1;
     IRExpr* arg2 = data->Iex.Binop.arg2;
@@ -279,8 +342,10 @@ void instrument_WrTmp_Binop(IRSB* sb_out, IRTemp tmp, IRExpr* data)
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp_Unop(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_Unop(IRStmt* st, IRSB* sb_out) //
 {
+    IRTemp tmp = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
     IRExpr* arg = data->Iex.Unop.arg;
     IRDirty* di;
 
@@ -294,8 +359,10 @@ void instrument_WrTmp_Unop(IRSB* sb_out, IRTemp tmp, IRExpr* data)
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp_Load(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_Load(IRStmt* st, IRSB* sb_out) //
 {
+    IRTemp tmp = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
     Int size = sizeofIRType(data->Iex.Load.ty);
     IRExpr* addr = data->Iex.Load.addr;
     IRDirty* di;
@@ -327,8 +394,9 @@ void instrument_WrTmp_Load(IRSB* sb_out, IRTemp tmp, IRExpr* data)
         addStmtToIRSB(sb_out, IRStmt_Dirty(di));
     }
 }
-void instrument_WrTmp_Const(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_Const(IRStmt* st, IRSB* sb_out) //
 {
+    IRTemp tmp = st->Ist.WrTmp.tmp;
     IRDirty* di;
 
     di = unsafeIRDirty_0_N(0,
@@ -338,8 +406,10 @@ void instrument_WrTmp_Const(IRSB* sb_out, IRTemp tmp, IRExpr* data)
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp_Mux0X(IRSB* sb_out, IRTemp tmp, IRExpr* data)
+void instrument_WrTmp_Mux0X(IRStmt* st, IRSB* sb_out) //
 {
+    IRTemp tmp = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
     IRExpr* cond = data->Iex.Mux0X.cond;
     IRExpr* expr0 = data->Iex.Mux0X.expr0;
     IRExpr* exprX = data->Iex.Mux0X.exprX;
@@ -359,12 +429,9 @@ void instrument_WrTmp_Mux0X(IRSB* sb_out, IRTemp tmp, IRExpr* data)
                                          );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
-void instrument_WrTmp(IRStmt* st, IRSB* sb_out)
+void instrument_WrTmp(IRStmt* st, IRSB* sb_out) //
 {
-    IRTemp tmp = st->Ist.WrTmp.tmp;
-    IRExpr* data = st->Ist.WrTmp.data;
-
-    switch (data->tag)
+    switch (st->Ist.WrTmp.data->tag)
     {
         case Iex_Binder:
         // we don't care about floating point and SIMD operations
@@ -373,25 +440,25 @@ void instrument_WrTmp(IRStmt* st, IRSB* sb_out)
             break;
 
         case Iex_Get:
-            instrument_WrTmp_Get(sb_out, tmp, data);
+            instrument_WrTmp_Get(st, sb_out);
             break;
         case Iex_GetI:
-            instrument_WrTmp_GetI(data);
+            instrument_WrTmp_GetI(st, sb_out);
             break;
         case Iex_RdTmp:
-            instrument_WrTmp_RdTmp(sb_out, tmp, data);
+            instrument_WrTmp_RdTmp(st, sb_out);
             break;
         case Iex_Binop:
-            instrument_WrTmp_Binop(sb_out, tmp, data);
+            instrument_WrTmp_Binop(st, sb_out);
             break;
         case Iex_Unop:
-            instrument_WrTmp_Unop(sb_out, tmp, data);
+            instrument_WrTmp_Unop(st, sb_out);
             break;
         case Iex_Load:
-            instrument_WrTmp_Load(sb_out, tmp, data);
+            instrument_WrTmp_Load(st, sb_out);
             break;
         case Iex_Const:
-            instrument_WrTmp_Const(sb_out, tmp, data);
+            instrument_WrTmp_Const(st, sb_out);
             break;
         case Iex_CCall:
             // ppIRStmt(st);
@@ -399,11 +466,11 @@ void instrument_WrTmp(IRStmt* st, IRSB* sb_out)
             // TODO Iex_CCall
             break;
         case Iex_Mux0X:
-            instrument_WrTmp_Mux0X(sb_out, tmp, data);
+            instrument_WrTmp_Mux0X(st, sb_out);
             break;
     }
 }
-void instrument_Store(IRStmt* st, IRSB* sb_out)
+void instrument_Store(IRStmt* st, IRSB* sb_out) //
 {
     IRExpr* addr = st->Ist.Store.addr;
     IRExpr* data = st->Ist.Store.data;
@@ -438,108 +505,9 @@ void instrument_Store(IRStmt* st, IRSB* sb_out)
         addStmtToIRSB(sb_out, IRStmt_Dirty(di));
     }
 }
-void instrument_LLSC_Load_Linked(IRSB* sb_out, IRTemp result, IRExpr* addr)
+void instrument_CAS_single_element(IRStmt* st, IRSB* sb_out) //
 {
-    Int size = sizeofIRType(typeOfIRTemp(sb_out->tyenv, result));
-    IRDirty* di;
-
-    if (addr->tag == Iex_RdTmp)
-    {
-        di = unsafeIRDirty_0_N(0,
-                               "helper_instrument_LLSC_Load_Linked",
-                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Load_Linked),
-                               mkIRExprVec_3(mkIRExpr_HWord(result),
-                                             assignNew_HWord(sb_out, addr),
-                                             mkIRExpr_HWord(size))
-                               );
-        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
-    }
-    else // addr->tag == Iex_Const
-    {
-        tl_assert(addr->Iex.Const.con->tag == Ico_U32);
-
-        di = unsafeIRDirty_0_N(0,
-                               "helper_instrument_LLSC_Load_Linked",
-                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Load_Linked),
-                               mkIRExprVec_3(mkIRExpr_HWord(result),
-                                             mkIRExpr_HWord(addr->Iex.Const.con->Ico.U32),
-                                             mkIRExpr_HWord(size))
-                               );
-        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
-    }
-}
-void instrument_LLSC_Store_Conditional(IRSB* sb_out, IRExpr* addr, IRExpr* storedata, IRTemp result)
-{
-    tl_assert(isIRAtom(storedata));
-
-    Int size = sizeofIRType(typeOfIRExpr(sb_out->tyenv, storedata));
-    IRExpr* result_expr = IRExpr_RdTmp(result);
-    IRDirty* di;
-
-    if (addr->tag == Iex_RdTmp)
-    {
-        di = unsafeIRDirty_0_N(0,
-                               "helper_instrument_LLSC_Store_Conditional",
-                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Store_Conditional),
-                               mkIRExprVec_4(assignNew_HWord(sb_out, addr),
-                                             mkIRExpr_HWord((storedata->tag == Iex_RdTmp) ? storedata->Iex.RdTmp.tmp : IRTemp_INVALID),
-                                             mkIRExpr_HWord(size),
-                                             assignNew_HWord(sb_out, result_expr))
-                               );
-        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
-    }
-    else // addr->tag == Iex_Const
-    {
-        tl_assert(addr->Iex.Const.con->tag == Ico_U32);
-
-        di = unsafeIRDirty_0_N(0,
-                               "helper_instrument_LLSC_Store_Conditional",
-                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Store_Conditional),
-                               mkIRExprVec_4(mkIRExpr_HWord(addr->Iex.Const.con->Ico.U32),
-                                             mkIRExpr_HWord((storedata->tag == Iex_RdTmp) ? storedata->Iex.RdTmp.tmp : IRTemp_INVALID),
-                                             mkIRExpr_HWord(size),
-                                             assignNew_HWord(sb_out, result_expr))
-                               );
-        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
-    }
-}
-void instrument_LLSC(IRStmt* st, IRSB* sb_out)
-{
-    IRTemp result = st->Ist.LLSC.result;
-    IRExpr* addr = st->Ist.LLSC.addr;
-    IRExpr* storedata = st->Ist.LLSC.storedata;
-
-    tl_assert(isIRAtom(addr));
-
-    if (storedata == NULL)
-    {
-        instrument_LLSC_Load_Linked(sb_out, result, addr);
-    }
-    else
-    {
-        instrument_LLSC_Store_Conditional(sb_out, addr, storedata, result);
-    }
-}
-void instrument_Exit(IRStmt* st, IRSB* sb_out)
-{
-    IRExpr* guard = st->Ist.Exit.guard;
-    Int offsIP = st->Ist.Exit.offsIP;
-    Int size = sizeofIRType(typeOfIRConst(st->Ist.Exit.dst));
-    IRDirty* di;
-
-    tl_assert(guard->tag == Iex_RdTmp);
-
-    di = unsafeIRDirty_0_N(0,
-                           "helper_instrument_Exit",
-                           VG_(fnptr_to_fnentry)(helper_instrument_Exit),
-                           mkIRExprVec_3(assignNew_HWord(sb_out, guard),
-                                         mkIRExpr_HWord(offsIP),
-                                         mkIRExpr_HWord(size))
-                           );
-    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
-}
-void instrument_CAS_single_element(IRSB* sb_out, IRCAS* cas)
-{
+    IRCAS* cas = st->Ist.CAS.details;
     IRTemp oldLo = cas->oldLo;
     IRExpr* addr = cas->addr;
     IRExpr* expdLo = cas->expdLo;
@@ -591,9 +559,11 @@ void instrument_CAS_single_element(IRSB* sb_out, IRCAS* cas)
         addStmtToIRSB(sb_out, IRStmt_Dirty(di));
     }
 }
-void instrument_CAS_double_element(IRSB* sb_out, IRCAS* cas)
+void instrument_CAS_double_element(IRStmt* st, IRSB* sb_out) //
 {
+    IRCAS* cas = st->Ist.CAS.details;
     IRTemp oldHi = cas->oldHi, oldLo = cas->oldLo;
+    IREndness end = cas->end;
     IRExpr* addr = cas->addr;
     IRExpr *expdHi = cas->expdHi, *expdLo = cas->expdLo;
     IRExpr *dataHi = cas->dataHi, *dataLo = cas->dataLo;
@@ -603,6 +573,7 @@ void instrument_CAS_double_element(IRSB* sb_out, IRCAS* cas)
     IRDirty* di;
 
     tl_assert(isIRAtom(addr));
+    tl_assert(end == Iend_LE); // we assume endianness is little endian
     tl_assert(isIRAtom(dataLo));
     tl_assert(isIRAtom(dataHi));
 
@@ -650,19 +621,123 @@ void instrument_CAS_double_element(IRSB* sb_out, IRCAS* cas)
         addStmtToIRSB(sb_out, IRStmt_Dirty(di));
     }
 }
-void instrument_CAS(IRStmt* st, IRSB* sb_out)
+void instrument_CAS(IRStmt* st, IRSB* sb_out) //
 {
-    IRCAS* cas = st->Ist.CAS.details;
-
-    if (cas->oldHi == IRTemp_INVALID)
+    if (st->Ist.CAS.details->oldHi == IRTemp_INVALID)
     {
-        instrument_CAS_single_element(sb_out, cas);
+        instrument_CAS_single_element(st, sb_out);
     }
     else
     {
-        instrument_CAS_double_element(sb_out, cas);
+        instrument_CAS_double_element(st, sb_out);
     }
 }
+void instrument_LLSC_Load_Linked(IRStmt* st, IRSB* sb_out) //
+{
+    IRTemp result = st->Ist.LLSC.result;
+    IRExpr* addr = st->Ist.LLSC.addr;
+    Int size = sizeofIRType(typeOfIRTemp(sb_out->tyenv, result));
+    IRDirty* di;
+
+    tl_assert(isIRAtom(addr));
+
+    if (addr->tag == Iex_RdTmp)
+    {
+        di = unsafeIRDirty_0_N(0,
+                               "helper_instrument_LLSC_Load_Linked",
+                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Load_Linked),
+                               mkIRExprVec_3(mkIRExpr_HWord(result),
+                                             assignNew_HWord(sb_out, addr),
+                                             mkIRExpr_HWord(size))
+                               );
+        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+    }
+    else // addr->tag == Iex_Const
+    {
+        tl_assert(addr->Iex.Const.con->tag == Ico_U32);
+
+        di = unsafeIRDirty_0_N(0,
+                               "helper_instrument_LLSC_Load_Linked",
+                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Load_Linked),
+                               mkIRExprVec_3(mkIRExpr_HWord(result),
+                                             mkIRExpr_HWord(addr->Iex.Const.con->Ico.U32),
+                                             mkIRExpr_HWord(size))
+                               );
+        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+    }
+}
+void instrument_LLSC_Store_Conditional(IRStmt* st, IRSB* sb_out) //
+{
+    IRTemp result = st->Ist.LLSC.result;
+    IRExpr* addr = st->Ist.LLSC.addr;
+    IRExpr* storedata = st->Ist.LLSC.storedata;
+    Int size = sizeofIRType(typeOfIRExpr(sb_out->tyenv, storedata));
+    IRExpr* result_expr = IRExpr_RdTmp(result);
+    IRDirty* di;
+
+    tl_assert(isIRAtom(addr));
+    tl_assert(isIRAtom(storedata));
+
+    if (addr->tag == Iex_RdTmp)
+    {
+        di = unsafeIRDirty_0_N(0,
+                               "helper_instrument_LLSC_Store_Conditional",
+                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Store_Conditional),
+                               mkIRExprVec_4(assignNew_HWord(sb_out, addr),
+                                             mkIRExpr_HWord((storedata->tag == Iex_RdTmp) ? storedata->Iex.RdTmp.tmp : IRTemp_INVALID),
+                                             mkIRExpr_HWord(size),
+                                             assignNew_HWord(sb_out, result_expr))
+                               );
+        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+    }
+    else // addr->tag == Iex_Const
+    {
+        tl_assert(addr->Iex.Const.con->tag == Ico_U32);
+
+        di = unsafeIRDirty_0_N(0,
+                               "helper_instrument_LLSC_Store_Conditional",
+                               VG_(fnptr_to_fnentry)(helper_instrument_LLSC_Store_Conditional),
+                               mkIRExprVec_4(mkIRExpr_HWord(addr->Iex.Const.con->Ico.U32),
+                                             mkIRExpr_HWord((storedata->tag == Iex_RdTmp) ? storedata->Iex.RdTmp.tmp : IRTemp_INVALID),
+                                             mkIRExpr_HWord(size),
+                                             assignNew_HWord(sb_out, result_expr))
+                               );
+        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+    }
+}
+void instrument_LLSC(IRStmt* st, IRSB* sb_out) //
+{
+    if (st->Ist.LLSC.storedata == NULL)
+    {
+        instrument_LLSC_Load_Linked(st, sb_out);
+    }
+    else
+    {
+        instrument_LLSC_Store_Conditional(st, sb_out);
+    }
+}
+void instrument_Exit(IRStmt* st, IRSB* sb_out) //
+{
+    IRExpr* guard = st->Ist.Exit.guard;
+    Int offsIP = st->Ist.Exit.offsIP;
+    Int size = sizeofIRType(typeOfIRConst(st->Ist.Exit.dst));
+    IRDirty* di;
+
+    tl_assert(guard->tag == Iex_RdTmp);
+
+    di = unsafeIRDirty_0_N(0,
+                           "helper_instrument_Exit",
+                           VG_(fnptr_to_fnentry)(helper_instrument_Exit),
+                           mkIRExprVec_3(assignNew_HWord(sb_out, guard),
+                                         mkIRExpr_HWord(offsIP),
+                                         mkIRExpr_HWord(size))
+                           );
+    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+}
+
+//
+//  BASIC TOOL FUNCTIONS
+//
 
 static void fz_post_clo_init(void)
 {
@@ -713,7 +788,7 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
                 instrument_Put(st, sb_out);
                 break;
             case Ist_PutI:
-                instrument_PutI(st);
+                instrument_PutI(st, sb_out);
                 break;
             case Ist_WrTmp:
                 instrument_WrTmp(st, sb_out);
@@ -722,7 +797,7 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
                 instrument_Store(st, sb_out);
                 break;
             case Ist_CAS:
-                addStmtToIRSB(sb_out, st);
+                addStmtToIRSB(sb_out, st); // dirty helpers use temporaries (oldHi, oldLo) defined in the instruction
                 instrument_CAS(st, sb_out);
                 break;
             case Ist_LLSC:
@@ -733,8 +808,9 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
                 break;
         }
 
-        if (st->tag != Ist_CAS)
+        if (st->tag != Ist_CAS) {
             addStmtToIRSB(sb_out, st);
+        }
     }
 
     // ppIRSB(sb_in);
@@ -749,11 +825,10 @@ static void fz_fini(Int exitcode)
 
 static void fz_pre_clo_init(void)
 {
-   VG_(details_name)            ("Nulgrind");
+   VG_(details_name)            ("DaFuzz");
    VG_(details_version)         (NULL);
-   VG_(details_description)     ("the minimal Valgrind tool");
-   VG_(details_copyright_author)(
-      "Copyright (C) 2002-2012, and GNU GPL'd, by Nicholas Nethercote.");
+   VG_(details_description)     ("a concolic fuzzer");
+   VG_(details_copyright_author)("Copyright (C) 2013, and GNU GPL'd, by Sonny Tavernier.");
    VG_(details_bug_reports_to)  (VG_BUGS_TO);
 
    VG_(details_avg_translation_sizeB) ( 275 );

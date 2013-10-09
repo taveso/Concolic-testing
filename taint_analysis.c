@@ -115,7 +115,7 @@ char temporary_is_tainted(IRTemp tmp)
 {
     if (shadow_tmp_exists(tmp))
     {
-        return g_ShadowTempArray[tmp];
+        return shadowTempArray[tmp];
     }
     else
         VG_(tool_panic)("temporary_is_tainted");

@@ -47,7 +47,7 @@ void flip_register(UInt offset, UInt size);
 
 #define MAX_TEMPORARIES 512
 
-char g_ShadowTempArray[MAX_TEMPORARIES]; // a temporary is written before being read
+char shadowTempArray[MAX_TEMPORARIES]; // a temporary is assigned before being used
 
 char shadow_tmp_exists(IRTemp tmp);
 void flip_temporary(IRTemp tmp);
