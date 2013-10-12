@@ -68,6 +68,17 @@ char memory_is_tainted(UInt addr, UInt size)
     }
 }
 
+void taint_memory(UInt addr, unsigned long size)
+{
+    unsigned long i;
+
+    for (i = 0; i < size; i++) {
+        if (!byte_is_tainted(addr+i)) {
+            flip_byte(addr+i);
+        }
+    }
+}
+
 //
 //  REGISTERS
 //

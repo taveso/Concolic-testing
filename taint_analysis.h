@@ -14,6 +14,8 @@ char qword_is_tainted(UInt addr);
 char dqword_is_tainted(UInt addr);
 char memory_is_tainted(UInt addr, UInt size);
 
+void taint_memory(UInt addr, unsigned long size);
+
 /* REGISTERS */
 
 char register8_is_tainted(Register reg);

@@ -53,6 +53,8 @@ void flip_byte(UInt addr)
     Chunk* chunk = get_chunk_for_writing(addr);
 
     chunk->bytes[addr & 0xffff] ^= 1;
+
+    VG_(printf)("flip_byte(0x%08x): %d -> %d\n", addr, chunk->bytes[addr & 0xffff]^1, chunk->bytes[addr & 0xffff]);
 }
 
 void flip_word(UInt addr)
@@ -166,12 +168,15 @@ void flip_register(UInt offset, UInt size)
     {
         case 1:
             flip_register8(reg);
+            VG_(printf)("flip_register8(%d)\n", reg);
             break;
         case 2:
             flip_register16(reg);
+            VG_(printf)("flip_register16(%d)\n", reg);
             break;
         case 4:
             flip_register32(reg);
+            VG_(printf)("flip_register32(%d)\n", reg);
             break;
         default:
             VG_(tool_panic)("flip_register");

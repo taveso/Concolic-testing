@@ -5,6 +5,7 @@
 #include "pub_tool_libcassert.h"    // tl_assert()
 #include "pub_tool_libcprint.h"     // VG_(printf)
 #include "pub_tool_machine.h"       // VG_(fnptr_to_fnentry)
+#include "pub_tool_libcbase.h"      // VG_(strcmp)
 
 /*
     Bind the given expression to a new temporary, and return the temporary.
@@ -736,6 +737,67 @@ void instrument_Exit(IRStmt* st, IRSB* sb_out) //
 }
 
 //
+//  SYSCALL WRAPPERS
+//
+
+#define SYS_READ    3
+#define SYS_OPEN    5
+#define TEST_FILE   "test.txt"
+
+int fd_to_taint = 0;
+
+void handle_sys_read(UWord* args, SysRes res)
+{
+    int fd;
+    void* buf;
+    UInt addr;
+
+    if (res._isError == 0)
+    {
+        fd = (int)args[0];
+        buf = (void*)args[1];
+        addr = buf;
+
+        if (fd == fd_to_taint) {
+            VG_(printf)("read(%p) = %lu\n", buf, res._val);
+            taint_memory(addr, res._val);
+        }
+    }
+}
+
+void handle_sys_open(UWord* args, SysRes res)
+{
+    const char* pathname;
+
+    if (res._isError == 0)
+    {
+        pathname = (const char *)args[0];
+
+        if (VG_(strcmp)(pathname, TEST_FILE) == 0) {
+            VG_(printf)("open(\"%s\", ..) = %lu\n", pathname, res._val);
+            fd_to_taint = res._val;
+        }
+    }
+}
+
+static void pre_syscall(ThreadId tId, UInt syscall_number, UWord* args, UInt nArgs)
+{
+}
+
+static void post_syscall(ThreadId tId, UInt syscall_number, UWord* args, UInt nArgs, SysRes res)
+{
+    switch (syscall_number)
+    {
+        case SYS_READ:
+            handle_sys_read(args, res);
+            break;
+        case SYS_OPEN:
+            handle_sys_open(args, res);
+            break;
+    }
+}
+
+//
 //  BASIC TOOL FUNCTIONS
 //
 
@@ -836,6 +898,8 @@ static void fz_pre_clo_init(void)
    VG_(basic_tool_funcs)        (fz_post_clo_init,
                                  fz_instrument,
                                  fz_fini);
+
+   VG_(needs_syscall_wrapper)   (pre_syscall, post_syscall);
 
    /* No needs, no core events to track */
 }
