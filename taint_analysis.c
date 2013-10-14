@@ -14,7 +14,7 @@ char byte_is_tainted(UInt addr)
     if (chunk == NULL)
         return 0;
 
-    return chunk->bytes[addr & 0xffff];
+    return chunk->bytes[addr & 0xffff].tainted;
 }
 
 char word_is_tainted(UInt addr)
@@ -68,34 +68,23 @@ char memory_is_tainted(UInt addr, UInt size)
     }
 }
 
-void taint_memory(UInt addr, unsigned long size)
-{
-    unsigned long i;
-
-    for (i = 0; i < size; i++) {
-        if (!byte_is_tainted(addr+i)) {
-            flip_byte(addr+i);
-        }
-    }
-}
-
 //
 //  REGISTERS
 //
 
 char register8_is_tainted(Register reg)
 {
-    return registers8[reg];
+    return registers8[reg].tainted;
 }
 
 char register16_is_tainted(Register reg)
 {
-    return registers16[reg];
+    return registers16[reg].tainted;
 }
 
 char register32_is_tainted(Register reg)
 {
-    return registers32[reg];
+    return registers32[reg].tainted;
 }
 
 char register_is_tainted(UInt offset, UInt size)
@@ -124,12 +113,9 @@ char register_is_tainted(UInt offset, UInt size)
 
 char temporary_is_tainted(IRTemp tmp)
 {
-    if (shadow_tmp_exists(tmp))
-    {
-        return shadowTempArray[tmp];
-    }
-    else
-        VG_(tool_panic)("temporary_is_tainted");
+    tl_assert(tmp < MAX_TEMPORARIES);
+
+    return shadowTempArray[tmp].tainted;
 }
 
 char IRTemp_is_tainted(IRTemp tmp)
