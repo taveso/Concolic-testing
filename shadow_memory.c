@@ -48,11 +48,10 @@ void update_dep(char** buffer, char* dep)
 
 void free_dep(char** buffer)
 {
-    /*
     if (*buffer != NULL) {
         VG_(free)(*buffer);
+        *buffer = NULL;
     }
-    */
 }
 
 //
