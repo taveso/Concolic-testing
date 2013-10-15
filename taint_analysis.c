@@ -54,14 +54,16 @@ char memory_is_tainted(UInt addr, UInt size)
     switch (size)
     {
         case 1:
-            return byte_is_tainted(addr);
-        case 2:
-            return word_is_tainted(addr);
-        case 4:
-            return dword_is_tainted(addr);
+            return 0;
         case 8:
-            return qword_is_tainted(addr);
+            return byte_is_tainted(addr);
         case 16:
+            return word_is_tainted(addr);
+        case 32:
+            return dword_is_tainted(addr);
+        case 64:
+            return qword_is_tainted(addr);
+        case 128:
             return dqword_is_tainted(addr);
         default:
             VG_(tool_panic)("memory_is_tainted");
@@ -97,10 +99,12 @@ char register_is_tainted(UInt offset, UInt size)
     switch (size)
     {
         case 1:
+            return 0;
+        case 8:
             return register8_is_tainted(reg);
-        case 2:
+        case 16:
             return register16_is_tainted(reg);
-        case 4:
+        case 32:
             return register32_is_tainted(reg);
         default:
             VG_(tool_panic)("register_is_tainted");

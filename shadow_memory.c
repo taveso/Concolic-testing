@@ -4,10 +4,6 @@
 #include "pub_tool_mallocfree.h"    // VG_(malloc) VG_(free)
 #include "pub_tool_libcassert.h"    // VG_(tool_panic)
 
-//
-//  SHADOW
-//
-
 void init_shadow_memory(void)
 {
     VG_(memset)(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
@@ -35,23 +31,26 @@ void destroy_shadow_memory(void)
 //  SYMBOLIC EXECUTION
 //
 
-void update_dep(char** buffer, char* dep)
+void update_dep(Shadow* shadow, char* dep, unsigned int dep_size)
 {
-    if (*buffer == NULL) {
-        *buffer = VG_(malloc)("", DEP_MAX_SIZE);
+    if (shadow->buffer == NULL) {
+        shadow->buffer = VG_(malloc)("", DEP_MAX_SIZE);
     }
+    VG_(snprintf)(shadow->buffer, DEP_MAX_SIZE, "%s", dep);
 
-    VG_(snprintf)(*buffer, DEP_MAX_SIZE, "%s", dep);
+    shadow->size = dep_size;
 
-    VG_(printf)("update_dep(): buffer: %s\n", *buffer);
+    VG_(printf)("update_dep(): buffer: %s (%u)\n", shadow->buffer, dep_size);
 }
 
-void free_dep(char** buffer)
+void free_dep(Shadow* shadow)
 {
-    if (*buffer != NULL) {
-        VG_(free)(*buffer);
-        *buffer = NULL;
+    if (shadow->buffer != NULL) {
+        VG_(free)(shadow->buffer);
+        shadow->buffer = NULL;
     }
+
+    shadow->size = 0;
 }
 
 //
@@ -74,6 +73,16 @@ Chunk* get_chunk_for_writing(UInt addr)
     }
 
     return MemoryMap[x];
+}
+
+Shadow* get_memory_shadow(UInt addr)
+{
+    Chunk* chunk = get_chunk_for_reading(addr);
+
+    if (chunk == NULL)
+        return NULL;
+
+    return &chunk->bytes[addr & 0xffff];
 }
 
 //
@@ -118,18 +127,20 @@ void flip_memory(UInt addr, UInt size)
     switch (size)
     {
         case 1:
-            flip_byte(addr);
-            break;
-        case 2:
-            flip_word(addr);
-            break;
-        case 4:
-            flip_dword(addr);
             break;
         case 8:
-            flip_qword(addr);
+            flip_byte(addr);
             break;
         case 16:
+            flip_word(addr);
+            break;
+        case 32:
+            flip_dword(addr);
+            break;
+        case 64:
+            flip_qword(addr);
+            break;
+        case 128:
             flip_dqword(addr);
             break;
         default:
@@ -141,65 +152,57 @@ void flip_memory(UInt addr, UInt size)
 //  MEMORY SYMBOLIC EXECUTION
 //
 
-char* get_memory_dep(UInt addr)
-{
-    Chunk* chunk = get_chunk_for_reading(addr);
-
-    if (chunk == NULL)
-        return NULL;
-
-    return chunk->bytes[addr & 0xffff].buffer;
-}
-
-void update_byte_dep(UInt addr, char* dep)
+void update_byte_dep(UInt addr, char* dep, unsigned int dep_size)
 {
     Chunk* chunk = get_chunk_for_writing(addr);
 
-    update_dep(&chunk->bytes[addr & 0xffff].buffer, dep);
+    update_dep(&chunk->bytes[addr & 0xffff], dep, dep_size);
 }
 
-void update_word_dep(UInt addr, char* dep)
+void update_word_dep(UInt addr, char* dep, unsigned int dep_size)
 {
-    update_byte_dep(addr, dep);
-    update_byte_dep(addr+1, dep);
+    update_byte_dep(addr, dep, dep_size);
+    update_byte_dep(addr+1, dep, dep_size);
 }
 
-void update_dword_dep(UInt addr, char* dep)
+void update_dword_dep(UInt addr, char* dep, unsigned int dep_size)
 {
-    update_word_dep(addr, dep);
-    update_word_dep(addr+2, dep);
+    update_word_dep(addr, dep, dep_size);
+    update_word_dep(addr+2, dep, dep_size);
 }
 
-void update_qword_dep(UInt addr, char* dep)
+void update_qword_dep(UInt addr, char* dep, unsigned int dep_size)
 {
-    update_dword_dep(addr, dep);
-    update_dword_dep(addr+4, dep);
+    update_dword_dep(addr, dep, dep_size);
+    update_dword_dep(addr+4, dep, dep_size);
 }
 
-void update_dqword_dep(UInt addr, char* dep)
+void update_dqword_dep(UInt addr, char* dep, unsigned int dep_size)
 {
-    update_dword_dep(addr, dep);
-    update_dword_dep(addr+8, dep);
+    update_dword_dep(addr, dep, dep_size);
+    update_dword_dep(addr+8, dep, dep_size);
 }
 
-void update_memory_dep(UInt addr, UInt size, char* dep)
+void update_memory_dep(UInt addr, UInt size, char* dep, unsigned int dep_size)
 {
     switch (size)
     {
         case 1:
-            update_byte_dep(addr, dep);
-            break;
-        case 2:
-            update_word_dep(addr, dep);
-            break;
-        case 4:
-            update_dword_dep(addr, dep);
             break;
         case 8:
-            update_qword_dep(addr, dep);
+            update_byte_dep(addr, dep, dep_size);
             break;
         case 16:
-            update_dqword_dep(addr, dep);
+            update_word_dep(addr, dep, dep_size);
+            break;
+        case 32:
+            update_dword_dep(addr, dep, dep_size);
+            break;
+        case 64:
+            update_qword_dep(addr, dep, dep_size);
+            break;
+        case 128:
+            update_dqword_dep(addr, dep, dep_size);
             break;
         default:
             VG_(tool_panic)("update_memory_dep");
@@ -213,7 +216,7 @@ void free_byte_dep(UInt addr)
     if (chunk == NULL)
         return;
 
-    free_dep(&chunk->bytes[addr & 0xffff].buffer);
+    free_dep(&chunk->bytes[addr & 0xffff]);
 }
 
 void free_word_dep(UInt addr)
@@ -245,18 +248,20 @@ void free_memory_dep(UInt addr, UInt size)
     switch (size)
     {
         case 1:
-            free_byte_dep(addr);
-            break;
-        case 2:
-            free_word_dep(addr);
-            break;
-        case 4:
-            free_dword_dep(addr);
             break;
         case 8:
-            free_qword_dep(addr);
+            free_byte_dep(addr);
             break;
         case 16:
+            free_word_dep(addr);
+            break;
+        case 32:
+            free_dword_dep(addr);
+            break;
+        case 64:
+            free_qword_dep(addr);
+            break;
+        case 128:
             free_dqword_dep(addr);
             break;
         default:
@@ -282,6 +287,28 @@ Register get_reg_from_offset(UInt offset)
         case 36: return EDI;
         case 68: return EIP;
         default: return REG_INVALID;
+    }
+}
+
+Shadow* get_register_shadow(UInt offset, UInt size)
+{
+    Register reg = get_reg_from_offset(offset);
+
+    if (reg == REG_INVALID)
+        return NULL;
+
+    switch (size)
+    {
+        case 1:
+            return NULL;
+        case 8:
+            return &registers8[reg];
+        case 16:
+            return &registers16[reg];
+        case 32:
+            return &registers32[reg];
+        default:
+            VG_(tool_panic)("get_reg_shadow");
     }
 }
 
@@ -330,12 +357,14 @@ void flip_register(UInt offset, UInt size)
     switch (size)
     {
         case 1:
+            break;
+        case 8:
             flip_register8(reg);
             break;
-        case 2:
+        case 16:
             flip_register16(reg);
             break;
-        case 4:
+        case 32:
             flip_register32(reg);
             break;
         default:
@@ -347,51 +376,31 @@ void flip_register(UInt offset, UInt size)
 //  REGISTERS SYMBOLIC EXECUTION
 //
 
-char* get_reg_dep(UInt offset, UInt size)
+void update_register8_dep(Register reg, char* dep, unsigned int dep_size)
 {
-    Register reg = get_reg_from_offset(offset);
-
-    if (reg == REG_INVALID)
-        return NULL;
-
-    switch (size)
-    {
-        case 1:
-            return registers8[reg].buffer;
-        case 2:
-            return registers16[reg].buffer;
-        case 4:
-            return registers32[reg].buffer;
-        default:
-            VG_(tool_panic)("get_reg_dep");
-    }
+    update_dep(&registers8[reg], dep, dep_size);
 }
 
-void update_register8_dep(Register reg, char* dep)
+void update_register16_dep(Register reg, char* dep, unsigned int dep_size)
 {
-    update_dep(&registers8[reg].buffer, dep);
-}
-
-void update_register16_dep(Register reg, char* dep)
-{
-    update_dep(&registers16[reg].buffer, dep);
+    update_dep(&registers16[reg], dep, dep_size);
 
     // EAX ECX EDX EBX
     if (reg < 4)
     {
-        update_register8_dep(reg, dep);      // low-order byte
-        update_register8_dep(reg+4, dep);    // high-order byte
+        update_register8_dep(reg, dep, dep_size);      // low-order byte
+        update_register8_dep(reg+4, dep, dep_size);    // high-order byte
     }
 }
 
-void update_register32_dep(Register reg, char* dep)
+void update_register32_dep(Register reg, char* dep, unsigned int dep_size)
 {
-    update_dep(&registers32[reg].buffer, dep);
+    update_dep(&registers32[reg], dep, dep_size);
 
-    update_register16_dep(reg, dep);
+    update_register16_dep(reg, dep, dep_size);
 }
 
-void update_register_dep(UInt offset, UInt size, char* dep)
+void update_register_dep(UInt offset, UInt size, char* dep, unsigned int dep_size)
 {
     Register reg = get_reg_from_offset(offset);
 
@@ -401,13 +410,15 @@ void update_register_dep(UInt offset, UInt size, char* dep)
     switch (size)
     {
         case 1:
-            update_register8_dep(reg, dep);
             break;
-        case 2:
-            update_register16_dep(reg, dep);
+        case 8:
+            update_register8_dep(reg, dep, dep_size);
             break;
-        case 4:
-            update_register32_dep(reg, dep);
+        case 16:
+            update_register16_dep(reg, dep, dep_size);
+            break;
+        case 32:
+            update_register32_dep(reg, dep, dep_size);
             break;
         default:
             VG_(tool_panic)("update_register_dep");
@@ -416,12 +427,12 @@ void update_register_dep(UInt offset, UInt size, char* dep)
 
 void free_register8_dep(Register reg)
 {
-    free_dep(&registers8[reg].buffer);
+    free_dep(&registers8[reg]);
 }
 
 void free_register16_dep(Register reg)
 {
-    free_dep(&registers16[reg].buffer);
+    free_dep(&registers16[reg]);
 
     // EAX ECX EDX EBX
     if (reg < 4)
@@ -433,7 +444,7 @@ void free_register16_dep(Register reg)
 
 void free_register32_dep(Register reg)
 {
-    free_dep(&registers32[reg].buffer);
+    free_dep(&registers32[reg]);
 
     free_register16_dep(reg);
 }
@@ -448,17 +459,30 @@ void free_register_dep(UInt offset, UInt size)
     switch (size)
     {
         case 1:
+            break;
+        case 8:
             free_register8_dep(reg);
             break;
-        case 2:
+        case 16:
             free_register16_dep(reg);
             break;
-        case 4:
+        case 32:
             free_register32_dep(reg);
             break;
         default:
             VG_(tool_panic)("free_register_dep");
     }
+}
+
+//
+//  TEMPORARIES
+//
+
+Shadow* get_temporary_shadow(IRTemp tmp)
+{
+    tl_assert(tmp < MAX_TEMPORARIES);
+
+    return &shadowTempArray[tmp];
 }
 
 //
@@ -478,23 +502,16 @@ void flip_temporary(IRTemp tmp)
 //  TEMPORARIES SYMBOLIC EXECUTION
 //
 
-char* get_temporary_dep(IRTemp tmp)
+void update_temporary_dep(IRTemp tmp, char* dep, unsigned int dep_size)
 {
     tl_assert(tmp < MAX_TEMPORARIES);
 
-    return shadowTempArray[tmp].buffer;
-}
-
-void update_temporary_dep(IRTemp tmp, char* dep)
-{
-    tl_assert(tmp < MAX_TEMPORARIES);
-
-    update_dep(&shadowTempArray[tmp].buffer, dep);
+    update_dep(&shadowTempArray[tmp], dep, dep_size);
 }
 
 void free_temporary_dep(IRTemp tmp)
 {
     tl_assert(tmp < MAX_TEMPORARIES);
 
-    free_dep(&shadowTempArray[tmp].buffer);
+    free_dep(&shadowTempArray[tmp]);
 }
