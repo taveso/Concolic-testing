@@ -183,12 +183,10 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1,
 
         if (arg1 == IRTemp_INVALID || !IRTemp_is_tainted(arg1))
         {
-            arg1_value &= (0xffffffff >> (32 - size));
             VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(%u,%s)", str, arg1_value, get_temporary_shadow(arg2)->buffer);
         }
         else if (arg2 == IRTemp_INVALID || !IRTemp_is_tainted(arg2))
         {
-            arg2_value &= (0xffffffff >> (32 - size));
             VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(%s,%u)", str, get_temporary_shadow(arg1)->buffer, arg2_value);
         }
         else {
@@ -407,9 +405,9 @@ static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IR
         }
     }
 }
-static VG_REGPARM(0) void helper_instrument_Exit(UInt guard, UInt offsIP, UInt size) //~
+static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt size, UInt guard) //~
 {
-    if (guard)
+    if (taken)
     {
         if (register_is_tainted(offsIP, size))
         {
@@ -417,6 +415,11 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt guard, UInt offsIP, UInt s
         }
 
         free_register_dep(offsIP, size);
+    }
+
+    if (temporary_is_tainted(guard))
+    {
+        VG_(printf)("%s\n", shadowTempArray[guard].buffer);
     }
 }
 
@@ -973,9 +976,10 @@ void instrument_Exit(IRStmt* st, IRSB* sb_out) //~~
     di = unsafeIRDirty_0_N(0,
                            "helper_instrument_Exit",
                            VG_(fnptr_to_fnentry)(helper_instrument_Exit),
-                           mkIRExprVec_3(assignNew_HWord(sb_out, guard),
+                           mkIRExprVec_4(assignNew_HWord(sb_out, guard),
                                          mkIRExpr_HWord(offsIP),
-                                         mkIRExpr_HWord(size))
+                                         mkIRExpr_HWord(size),
+                                         mkIRExpr_HWord(guard->Iex.RdTmp.tmp))
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
