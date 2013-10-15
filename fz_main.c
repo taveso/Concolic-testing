@@ -62,6 +62,9 @@ static IRExpr* assignNew_HWord(IRSB* sb_out, IRExpr* expr)
         case Ity_I32:
             addStmtToIRSB(sb_out, IRStmt_WrTmp(tmp, expr));
             break;
+        case Ity_I64:
+            addStmtToIRSB(sb_out, IRStmt_WrTmp(tmp, IRExpr_Unop(Iop_64to32, expr)));
+            break;
         default:
             VG_(tool_panic)("assignNew_HWord");
    }
@@ -164,7 +167,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp tmp_lhs, IRTemp t
         free_temporary_dep(tmp_lhs);
     }
 }
-static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1, IRTemp arg2, UInt op, UInt size) //~
+static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1, IRTemp arg2, UInt op, UInt size, UInt arg1_value, UInt arg2_value) //~
 {
     if (temporary_is_tainted(tmp) != (IRTemp_is_tainted(arg1) || IRTemp_is_tainted(arg2)))
     {
@@ -178,13 +181,15 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1,
 
         IROp_to_str(op, str);
 
-        // TODO: IRConst values
-
-        if (arg1 == IRTemp_INVALID) {
-            VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(IRConst,%s)", str, get_temporary_shadow(arg2)->buffer);
+        if (arg1 == IRTemp_INVALID || !IRTemp_is_tainted(arg1))
+        {
+            arg1_value &= (0xffffffff >> (32 - size));
+            VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(%u,%s)", str, arg1_value, get_temporary_shadow(arg2)->buffer);
         }
-        else if (arg2 == IRTemp_INVALID) {
-            VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(%s,IRConst)", str, get_temporary_shadow(arg1)->buffer);
+        else if (arg2 == IRTemp_INVALID || !IRTemp_is_tainted(arg2))
+        {
+            arg2_value &= (0xffffffff >> (32 - size));
+            VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(%s,%u)", str, get_temporary_shadow(arg1)->buffer, arg2_value);
         }
         else {
             VG_(snprintf)(dep, DEP_MAX_SIZE, "%s(%s,%s)", str, get_temporary_shadow(arg1)->buffer, get_temporary_shadow(arg2)->buffer);
@@ -556,11 +561,13 @@ void instrument_WrTmp_Binop(IRStmt* st, IRSB* sb_out) //~~
     di = unsafeIRDirty_0_N(0,
                            "helper_instrument_WrTmp_Binop",
                            VG_(fnptr_to_fnentry)(helper_instrument_WrTmp_Binop),
-                           mkIRExprVec_5(mkIRExpr_HWord(tmp),
+                           mkIRExprVec_7(mkIRExpr_HWord(tmp),
                                          mkIRExpr_HWord((arg1->tag == Iex_RdTmp) ? arg1->Iex.RdTmp.tmp : IRTemp_INVALID),
                                          mkIRExpr_HWord((arg2->tag == Iex_RdTmp) ? arg2->Iex.RdTmp.tmp : IRTemp_INVALID),
                                          mkIRExpr_HWord(op),
-                                         mkIRExpr_HWord(size))
+                                         mkIRExpr_HWord(size),
+                                         (arg1->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, arg1) : mkIRExpr_HWord(arg1->Iex.Const.con->Ico.U32),
+                                         (arg2->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, arg2) : mkIRExpr_HWord(arg2->Iex.Const.con->Ico.U32))
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
