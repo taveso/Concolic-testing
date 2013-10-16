@@ -289,8 +289,6 @@ static VG_REGPARM(0) void helper_instrument_Store(UInt addr, IRTemp data, UInt s
 
     if (memory_is_tainted(addr, size))
     {
-        // TODO: handle type conversions
-
         char dep[DEP_MAX_SIZE];
         VG_(snprintf)(dep, DEP_MAX_SIZE, "STle(%s)", get_temporary_shadow(data)->buffer);
 
@@ -721,7 +719,7 @@ void instrument_Store(IRStmt* st, IRSB* sb_out) //~~
 
     tl_assert(isIRAtom(addr));
     tl_assert(isIRAtom(data));
-    // tl_assert(typeOfIRExpr(sb_out->tyenv, addr) == typeOfIRExpr(sb_out->tyenv, data)); // false: addr:I32 / data:I[8|16|32|64]
+    // the data transfer type is the type of data
 
     if (addr->tag == Iex_RdTmp)
     {
@@ -924,7 +922,6 @@ void instrument_LLSC_Store_Conditional(IRStmt* st, IRSB* sb_out) //~~
     tl_assert(isIRAtom(addr));
     tl_assert(isIRAtom(storedata));
     // the data transfer type is the type of storedata
-    tl_assert(typeOfIRExpr(sb_out->tyenv, addr) == typeOfIRExpr(sb_out->tyenv, storedata));
 
     if (addr->tag == Iex_RdTmp)
     {
