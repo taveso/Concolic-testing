@@ -9,7 +9,7 @@ void destroy_shadow_memory(void);
 
 /* SHADOW DATA STRUCTURE */
 
-#define DEP_MAX_SIZE 512
+#define DEP_MAX_SIZE 1024
 
 typedef struct {
     char tainted;

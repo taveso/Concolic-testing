@@ -40,7 +40,7 @@ void update_dep(Shadow* shadow, char* dep, unsigned int dep_size)
 
     shadow->size = dep_size;
 
-    // VG_(printf)("update_dep(): buffer: %s (%u)\n", shadow->buffer, dep_size);
+    VG_(printf)("update_dep(): buffer: %s (%u)\n", shadow->buffer, dep_size);
 }
 
 void free_dep(Shadow* shadow)

@@ -251,6 +251,37 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Const(IRTemp tmp) //~
 
     free_temporary_dep(tmp);
 }
+static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition(IRTemp tmp, IRTemp cc_dep1, IRTemp cc_dep2, UInt cond, UInt cc_op_value, UInt cc_dep1_value, UInt cc_dep2_value)
+{
+    if (temporary_is_tainted(tmp) != (IRTemp_is_tainted(cc_dep1) || IRTemp_is_tainted(cc_dep2)))
+    {
+        flip_temporary(tmp);
+    }
+
+    if (temporary_is_tainted(tmp))
+    {
+        char dep[DEP_MAX_SIZE];
+
+        if (cc_dep1 == IRTemp_INVALID || !IRTemp_is_tainted(cc_dep1))
+        {
+            VG_(snprintf)(dep, DEP_MAX_SIZE, "x86g_calculate_condition(%u, %u, %u, %s)", cond, cc_op_value, cc_dep1_value, get_temporary_shadow(cc_dep2)->buffer);
+        }
+        else if (cc_dep2 == IRTemp_INVALID || !IRTemp_is_tainted(cc_dep2))
+        {
+            VG_(snprintf)(dep, DEP_MAX_SIZE, "x86g_calculate_condition(%u, %u, %s, %u)", cond, cc_op_value, get_temporary_shadow(cc_dep1)->buffer, cc_dep2_value);
+        }
+        else {
+            VG_(snprintf)(dep, DEP_MAX_SIZE, "x86g_calculate_condition(%u, %u, %s, %s)", cond, cc_op_value, get_temporary_shadow(cc_dep1)->buffer, get_temporary_shadow(cc_dep2)->buffer);
+        }
+
+        update_temporary_dep(tmp, dep, 1); // 1: x86g_calculate_condition returns 1 or 0
+    }
+    else
+    {
+        free_temporary_dep(tmp);
+    }
+
+}
 static VG_REGPARM(0) void helper_instrument_WrTmp_Mux0X(IRTemp tmp, UInt cond, IRTemp expr0, IRTemp exprX) //~
 {
     if (cond == 0)
@@ -415,10 +446,10 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt s
         free_register_dep(offsIP, size);
     }
 
-    if (temporary_is_tainted(guard))
+    /*if (temporary_is_tainted(guard))
     {
         VG_(printf)("%s\n", shadowTempArray[guard].buffer);
-    }
+    }*/
 }
 
 //
@@ -644,6 +675,56 @@ void instrument_WrTmp_Const(IRStmt* st, IRSB* sb_out) //~~
                            );
     addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
+/*
+    cc_op
+        add/sub/mul
+        adc/sbb
+        shl/shr/sar
+            tmp = cond(cc_op(cc_dep1, cc_dep2))
+        and/or/xor
+        inc/dec
+        rol/ror
+            tmp = cond(cc_op(cc_dep1, 0))
+
+    The taintness of tmp depends on taintness of both args. (we can't handle and(cc_dep1, 0) which gives an untainted result)
+*/
+void instrument_WrTmp_CCall(IRStmt* st, IRSB* sb_out)
+{
+    IRTemp tmp = st->Ist.WrTmp.tmp;
+    IRExpr* data = st->Ist.WrTmp.data;
+    IRCallee* cee = data->Iex.CCall.cee;
+    IRExpr** args = data->Iex.CCall.args;
+    IRDirty* di;
+
+    if (VG_(strcmp)(cee->name, "x86g_calculate_condition") == 0)
+    {
+        IRExpr* cond = args[0];
+        IRExpr* cc_op = args[1];
+        IRExpr* cc_dep1 = args[2];
+        IRExpr* cc_dep2 = args[3];
+
+        tl_assert(cond->tag == Iex_Const && cond->Iex.Const.con->tag == Ico_U32);
+        tl_assert(isIRAtom(cc_op));
+        tl_assert(isIRAtom(cc_dep1));
+        tl_assert(isIRAtom(cc_dep2));
+        if (cc_op->tag == Iex_Const) tl_assert(cc_op->Iex.Const.con->tag == Ico_U32);
+        if (cc_dep1->tag == Iex_Const) tl_assert(cc_dep1->Iex.Const.con->tag == Ico_U32);
+        if (cc_dep2->tag == Iex_Const) tl_assert(cc_dep2->Iex.Const.con->tag == Ico_U32);
+
+        di = unsafeIRDirty_0_N(0,
+                               "helper_instrument_WrTmp_CCall_x86g_calculate_condition",
+                               VG_(fnptr_to_fnentry)(helper_instrument_WrTmp_CCall_x86g_calculate_condition),
+                               mkIRExprVec_7(mkIRExpr_HWord(tmp),
+                                             mkIRExpr_HWord((cc_dep1->tag == Iex_RdTmp) ? cc_dep1->Iex.RdTmp.tmp : IRTemp_INVALID),
+                                             mkIRExpr_HWord((cc_dep2->tag == Iex_RdTmp) ? cc_dep2->Iex.RdTmp.tmp : IRTemp_INVALID),
+                                             mkIRExpr_HWord(cond->Iex.Const.con->Ico.U32),
+                                             (cc_op->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, cc_op) : mkIRExpr_HWord(cc_op->Iex.Const.con->Ico.U32),
+                                             (cc_dep1->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, cc_dep1) : mkIRExpr_HWord(cc_dep1->Iex.Const.con->Ico.U32),
+                                             (cc_dep2->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, cc_dep2) : mkIRExpr_HWord(cc_dep2->Iex.Const.con->Ico.U32))
+                               );
+        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+    }
+}
 void instrument_WrTmp_Mux0X(IRStmt* st, IRSB* sb_out) //~~
 {
     IRTemp tmp = st->Ist.WrTmp.tmp;
@@ -701,9 +782,7 @@ void instrument_WrTmp(IRStmt* st, IRSB* sb_out) //~~
             instrument_WrTmp_Const(st, sb_out);
             break;
         case Iex_CCall:
-            // ppIRStmt(st);
-            // VG_(printf)("\n");
-            // TODO: Iex_CCall
+            instrument_WrTmp_CCall(st, sb_out);
             break;
         case Iex_Mux0X:
             instrument_WrTmp_Mux0X(st, sb_out);
