@@ -78,6 +78,11 @@ static IRExpr* assignNew_HWord(IRSB* sb_out, IRExpr* expr)
 
 static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt size) //~
 {
+    if (get_reg_from_offset(offset) == guest_INVALID && IRTemp_is_tainted(data))
+    {
+        VG_(tool_panic)("helper_instrument_Put");
+    }
+
     if (register_is_tainted(offset, size) != IRTemp_is_tainted(data))
     {
         flip_register(offset, size);
@@ -446,10 +451,10 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt s
         free_register_dep(offsIP, size);
     }
 
-    /*if (temporary_is_tainted(guard))
+    if (temporary_is_tainted(guard))
     {
         VG_(printf)("%s\n", shadowTempArray[guard].buffer);
-    }*/
+    }
 }
 
 //
@@ -687,6 +692,7 @@ void instrument_WrTmp_Const(IRStmt* st, IRSB* sb_out) //~~
             tmp = cond(cc_op(cc_dep1, 0))
 
     The taintness of tmp depends on taintness of both args. (we can't handle and(cc_dep1, 0) which gives an untainted result)
+    cf. valgrind guest_x86_defs.h
 */
 void instrument_WrTmp_CCall(IRStmt* st, IRSB* sb_out)
 {

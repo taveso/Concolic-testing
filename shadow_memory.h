@@ -66,11 +66,29 @@ void free_memory_dep(UInt addr, UInt size);
 
 /* REGISTERS */
 
-typedef enum {EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, EIP, REG_INVALID} Register;
+#define TOTAL_SHADOW_REGISTERS  16
 
-Shadow registers8[9];
-Shadow registers16[9];
-Shadow registers32[9];
+typedef enum {guest_EAX,
+              guest_ECX,
+              guest_EDX,
+              guest_EBX,
+              guest_ESP,
+              guest_EBP,
+              guest_ESI,
+              guest_EDI,
+              guest_CC_OP,
+              guest_CC_DEP1,
+              guest_CC_DEP2,
+              guest_CC_NDEP,
+              guest_DFLAG,
+              guest_IDFLAG,
+              guest_ACFLAG,
+              guest_EIP,
+              guest_INVALID} Register;
+
+Shadow registers8[TOTAL_SHADOW_REGISTERS];
+Shadow registers16[TOTAL_SHADOW_REGISTERS];
+Shadow registers32[TOTAL_SHADOW_REGISTERS];
 
 Register get_reg_from_offset(UInt offset);
 

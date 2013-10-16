@@ -8,9 +8,9 @@ void init_shadow_memory(void)
 {
     VG_(memset)(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
 
-    VG_(memset)(registers8, 0, sizeof(Shadow)*9);
-    VG_(memset)(registers16, 0, sizeof(Shadow)*9);
-    VG_(memset)(registers32, 0, sizeof(Shadow)*9);
+    VG_(memset)(registers8, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
+    VG_(memset)(registers16, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
+    VG_(memset)(registers32, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
 
     VG_(memset)(shadowTempArray, 0, sizeof(Shadow)*MAX_TEMPORARIES);
 }
@@ -40,7 +40,7 @@ void update_dep(Shadow* shadow, char* dep, unsigned int dep_size)
 
     shadow->size = dep_size;
 
-    VG_(printf)("update_dep(): buffer: %s (%u)\n", shadow->buffer, dep_size);
+    // VG_(printf)("update_dep(): buffer: %s (%u)\n", shadow->buffer, dep_size);
 }
 
 void free_dep(Shadow* shadow)
@@ -277,16 +277,23 @@ Register get_reg_from_offset(UInt offset)
 {
     switch (offset)
     {
-        case 8: return EAX;
-        case 12: return ECX;
-        case 16: return EDX;
-        case 20: return EBX;
-        case 24: return ESP;
-        case 28: return EBP;
-        case 32: return ESI;
-        case 36: return EDI;
-        case 68: return EIP;
-        default: return REG_INVALID;
+        case 8: return guest_EAX;
+        case 12: return guest_ECX;
+        case 16: return guest_EDX;
+        case 20: return guest_EBX;
+        case 24: return guest_ESP;
+        case 28: return guest_EBP;
+        case 32: return guest_ESI;
+        case 36: return guest_EDI;
+        case 40: return guest_CC_OP;
+        case 44: return guest_CC_DEP1;
+        case 48: return guest_CC_DEP2;
+        case 52: return guest_CC_NDEP;
+        case 56: return guest_DFLAG;
+        case 60: return guest_IDFLAG;
+        case 64: return guest_ACFLAG;
+        case 68: return guest_EIP;
+        default: return guest_INVALID;
     }
 }
 
@@ -294,13 +301,11 @@ Shadow* get_register_shadow(UInt offset, UInt size)
 {
     Register reg = get_reg_from_offset(offset);
 
-    if (reg == REG_INVALID)
+    if (reg == guest_INVALID)
         return NULL;
 
     switch (size)
     {
-        case 1:
-            return NULL;
         case 8:
             return &registers8[reg];
         case 16:
@@ -351,13 +356,11 @@ void flip_register(UInt offset, UInt size)
 {
     Register reg = get_reg_from_offset(offset);
 
-    if (reg == REG_INVALID)
+    if (reg == guest_INVALID)
         return;
 
     switch (size)
     {
-        case 1:
-            break;
         case 8:
             flip_register8(reg);
             break;
@@ -404,13 +407,11 @@ void update_register_dep(UInt offset, UInt size, char* dep, unsigned int dep_siz
 {
     Register reg = get_reg_from_offset(offset);
 
-    if (reg == REG_INVALID)
+    if (reg == guest_INVALID)
         return;
 
     switch (size)
     {
-        case 1:
-            break;
         case 8:
             update_register8_dep(reg, dep, dep_size);
             break;
@@ -453,13 +454,11 @@ void free_register_dep(UInt offset, UInt size)
 {
     Register reg = get_reg_from_offset(offset);
 
-    if (reg == REG_INVALID)
+    if (reg == guest_INVALID)
         return;
 
     switch (size)
     {
-        case 1:
-            break;
         case 8:
             free_register8_dep(reg);
             break;

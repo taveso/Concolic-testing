@@ -93,13 +93,11 @@ char register_is_tainted(UInt offset, UInt size)
 {
     Register reg = get_reg_from_offset(offset);
 
-    if (reg == REG_INVALID)
+    if (reg == guest_INVALID)
         return 0;
 
     switch (size)
     {
-        case 1:
-            return 0;
         case 8:
             return register8_is_tainted(reg);
         case 16:
