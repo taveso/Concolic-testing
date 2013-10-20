@@ -7,18 +7,13 @@
 
 /* MEMORY */
 
-char byte_is_tainted(UInt addr);
-char word_is_tainted(UInt addr);
-char dword_is_tainted(UInt addr);
-char qword_is_tainted(UInt addr);
-char dqword_is_tainted(UInt addr);
 char memory_is_tainted(UInt addr, UInt size);
 
 /* REGISTERS */
 
-char register8_is_tainted(Register reg);
-char register16_is_tainted(Register reg);
-char register32_is_tainted(Register reg);
+char register8_is_tainted(guest_register reg);
+char register16_is_tainted(guest_register reg);
+char register32_is_tainted(guest_register reg);
 char register_is_tainted(UInt offset, UInt size);
 
 /* TEMPORARIES */

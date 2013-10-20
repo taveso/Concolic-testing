@@ -7,91 +7,47 @@
 //  MEMORY
 //
 
-char byte_is_tainted(UInt addr)
-{
-    Chunk* chunk = get_chunk_for_reading(addr);
-
-    if (chunk == NULL)
-        return 0;
-
-    return chunk->bytes[addr & 0xffff].tainted;
-}
-
-char word_is_tainted(UInt addr)
-{
-    if (byte_is_tainted(addr) || byte_is_tainted(addr+1))
-        return 1;
-
-    return 0;
-}
-
-char dword_is_tainted(UInt addr)
-{
-    if (word_is_tainted(addr) || word_is_tainted(addr+2))
-        return 1;
-
-    return 0;
-}
-
-char qword_is_tainted(UInt addr)
-{
-    if (dword_is_tainted(addr) || dword_is_tainted(addr+4))
-        return 1;
-
-    return 0;
-}
-
-char dqword_is_tainted(UInt addr)
-{
-    if (qword_is_tainted(addr) || qword_is_tainted(addr+8))
-        return 1;
-
-    return 0;
-}
-
 char memory_is_tainted(UInt addr, UInt size)
 {
-    switch (size)
+    Chunk* chunk;
+    int i;
+
+    for (i = 0; i < size/8; i++)
     {
-        case 1:
-            return 0;
-        case 8:
-            return byte_is_tainted(addr);
-        case 16:
-            return word_is_tainted(addr);
-        case 32:
-            return dword_is_tainted(addr);
-        case 64:
-            return qword_is_tainted(addr);
-        case 128:
-            return dqword_is_tainted(addr);
-        default:
-            VG_(tool_panic)("memory_is_tainted");
+        chunk = get_chunk_for_reading(addr+i);
+        if (chunk == NULL)
+            continue;
+
+        if (chunk->bytes[(addr+i) & 0xffff].tainted) {
+            return 1;
+        }
     }
+
+    return 0;
 }
 
 //
 //  REGISTERS
 //
 
-char register8_is_tainted(Register reg)
+char register8_is_tainted(guest_register reg)
 {
     return registers8[reg].tainted;
 }
 
-char register16_is_tainted(Register reg)
+char register16_is_tainted(guest_register reg)
 {
     return registers16[reg].tainted;
 }
 
-char register32_is_tainted(Register reg)
+char register32_is_tainted(guest_register reg)
 {
     return registers32[reg].tainted;
 }
 
 char register_is_tainted(UInt offset, UInt size)
 {
-    Register reg = get_reg_from_offset(offset);
+    guest_register reg = get_reg_from_offset(offset);
 
     if (reg == guest_INVALID)
         return 0;
