@@ -232,6 +232,7 @@ char* get_memory_dep(UInt addr, UInt size, char* dep)
         }
     }
 
+    tl_assert(dep[0] != '\0');
     return dep;
 }
 
@@ -262,7 +263,7 @@ void update_memory_dep(UInt addr, char* dep, unsigned int dep_size)
 
     update_dep(&chunk->bytes[addr & 0xffff], dep, dep_size);
 
-    free_memory_dep(addr, dep_size-8);
+    free_memory_dep(addr+1, dep_size-8);
 }
 
 void free_memory_dep(UInt addr, UInt size)

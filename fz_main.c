@@ -444,10 +444,10 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt s
         free_register_dep(offsIP, size);
     }
 
-    /*if (temporary_is_tainted(guard))
+    if (temporary_is_tainted(guard))
     {
-        VG_(printf)("%s\n", shadowTempArray[guard].buffer);
-    }*/
+        VG_(printf)("\n\nbranch: %s\n\n", shadowTempArray[guard].buffer);
+    }
 }
 
 //
