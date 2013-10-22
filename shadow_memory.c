@@ -41,6 +41,8 @@ void destroy_shadow_memory(void)
 
 void update_dep(Shadow* shadow, char* dep, unsigned int dep_size)
 {
+    tl_assert(DEP_MAX_SIZE >= dep_size);
+
     if (shadow->buffer == NULL) {
         shadow->buffer = VG_(malloc)("", DEP_MAX_LEN);
     }
@@ -48,7 +50,7 @@ void update_dep(Shadow* shadow, char* dep, unsigned int dep_size)
 
     shadow->size = dep_size;
 
-    VG_(printf)("update_dep(): %s (%u)\n", shadow->buffer, shadow->size);
+    // VG_(printf)("update_dep(): %s (%u)\n", shadow->buffer, shadow->size);
 }
 
 void free_dep(Shadow* shadow)
@@ -304,24 +306,31 @@ guest_register get_reg_from_offset(UInt offset)
     }
 }
 
-Shadow* get_register_shadow(UInt offset, UInt size)
+char* get_register_dep(UInt offset, UInt size)
 {
-    guest_register reg = get_reg_from_offset(offset);
+    guest_register reg;
+    Shadow shadow;
 
-    if (reg == guest_INVALID)
-        return NULL;
+    reg = get_reg_from_offset(offset);
+    tl_assert(reg != guest_INVALID);
 
     switch (size)
     {
         case 8:
-            return &registers8[reg];
+            shadow = registers8[reg];
+            break;
         case 16:
-            return &registers16[reg];
+            shadow = registers16[reg];
+            break;
         case 32:
-            return &registers32[reg];
+            shadow = registers32[reg];
+            break;
         default:
-            VG_(tool_panic)("get_register_shadow");
+            VG_(tool_panic)("get_register_dep");
     }
+
+    tl_assert(shadow.buffer != NULL);
+    return shadow.buffer;
 }
 
 //
@@ -351,8 +360,7 @@ void flip_register(UInt offset, UInt size)
 {
     guest_register reg = get_reg_from_offset(offset);
 
-    if (reg == guest_INVALID)
-        return;
+    tl_assert(reg != guest_INVALID);
 
     switch (size)
     {
@@ -376,17 +384,28 @@ void flip_register(UInt offset, UInt size)
 
 void update_register8_dep(guest_register reg, char* dep)
 {
+    char dep16[DEP_MAX_LEN] = {0};
+    char dep32[DEP_MAX_LEN] = {0};
+
+    VG_(snprintf)(dep16, DEP_MAX_LEN, "8to16_(%s)", dep);
+    VG_(snprintf)(dep32, DEP_MAX_LEN, "8to32_(%s)", dep);
+
     update_dep(&registers8[reg], dep, 8);
+    update_dep(&registers16[reg], dep16, 16);
+    update_dep(&registers32[reg], dep32, 32);
 }
 
 void update_register16_dep(guest_register reg, char* dep)
 {
     char dep8[DEP_MAX_LEN] = {0};
+    char dep32[DEP_MAX_LEN] = {0};
 
     VG_(snprintf)(dep8, DEP_MAX_LEN, "16to8_(And16_(%s, 0x00ff))", dep);
+    VG_(snprintf)(dep32, DEP_MAX_LEN, "16to32_(%s)", dep);
 
-    update_dep(&registers16[reg], dep, 16);
     update_dep(&registers8[reg], dep8, 8);
+    update_dep(&registers16[reg], dep, 16);
+    update_dep(&registers32[reg], dep32, 32);
 }
 
 void update_register32_dep(guest_register reg, char* dep)
@@ -394,20 +413,19 @@ void update_register32_dep(guest_register reg, char* dep)
     char dep16[DEP_MAX_LEN] = {0};
     char dep8[DEP_MAX_LEN] = {0};
 
-    VG_(snprintf)(dep16, DEP_MAX_LEN, "32to16_(And32_(%s,0x0000ffff))", dep);
-    VG_(snprintf)(dep8, DEP_MAX_LEN, "32to8_(And32_(%s,0x000000ff))", dep);
+    VG_(snprintf)(dep16, DEP_MAX_LEN, "32to16_(And32_(%s, 0x0000ffff))", dep);
+    VG_(snprintf)(dep8, DEP_MAX_LEN, "32to8_(And32_(%s, 0x000000ff))", dep);
 
-    update_dep(&registers32[reg], dep, 32);
-    update_dep(&registers16[reg], dep16, 16);
     update_dep(&registers8[reg], dep8, 8);
+    update_dep(&registers16[reg], dep16, 16);
+    update_dep(&registers32[reg], dep, 32);
 }
 
 void update_register_dep(UInt offset, UInt size, char* dep)
 {
     guest_register reg = get_reg_from_offset(offset);
 
-    if (reg == guest_INVALID)
-        return;
+    tl_assert(reg != guest_INVALID);
 
     switch (size)
     {
@@ -446,8 +464,7 @@ void free_register_dep(UInt offset, UInt size)
 {
     guest_register reg = get_reg_from_offset(offset);
 
-    if (reg == guest_INVALID)
-        return;
+    tl_assert(reg != guest_INVALID);
 
     switch (size)
     {
@@ -469,11 +486,15 @@ void free_register_dep(UInt offset, UInt size)
 //  TEMPORARIES
 //
 
-Shadow* get_temporary_shadow(IRTemp tmp)
+char* get_temporary_dep(IRTemp tmp)
 {
-    tl_assert(tmp < MAX_TEMPORARIES);
+    Shadow shadow;
 
-    return &shadowTempArray[tmp];
+    tl_assert(tmp < MAX_TEMPORARIES);
+    shadow = shadowTempArray[tmp];
+
+    tl_assert(shadow.buffer != NULL);
+    return shadow.buffer;
 }
 
 //
@@ -485,8 +506,6 @@ void flip_temporary(IRTemp tmp)
     tl_assert(tmp < MAX_TEMPORARIES);
 
     shadowTempArray[tmp].tainted ^= 1;
-
-    // VG_(printf)("flip_temporary(%u): %d -> %d\n", tmp, shadowTempArray[tmp].tainted^1, shadowTempArray[tmp].tainted);
 }
 
 //

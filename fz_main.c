@@ -80,10 +80,8 @@ static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt s
 {
     if (get_reg_from_offset(offset) == guest_INVALID)
     {
-        if (IRTemp_is_tainted(data))
-            VG_(tool_panic)("helper_instrument_Put");
-        else
-            return;
+        tl_assert(!IRTemp_is_tainted(data));
+        return;
     }
 
     if (register_is_tainted(offset, size) != IRTemp_is_tainted(data))
@@ -95,7 +93,7 @@ static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt s
     {
         char dep[DEP_MAX_LEN] = {0};
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "PUT(%s)", get_temporary_shadow(data)->buffer);
+        VG_(snprintf)(dep, DEP_MAX_LEN, "PUT(%s)", get_temporary_dep(data));
 
         update_register_dep(offset, size, dep);
     }
@@ -108,10 +106,7 @@ static VG_REGPARM(0) void helper_instrument_PutI(UInt base, UInt ix, UInt bias, 
 {
     UInt index = base+((ix+bias)%nElems);
 
-    if (get_reg_from_offset(index) != guest_INVALID)
-    {
-        VG_(tool_panic)("helper_instrument_PutI");
-    }
+    tl_assert(get_reg_from_offset(index) == guest_INVALID);
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, UInt size)
 {
@@ -124,7 +119,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, U
     {
         char dep[DEP_MAX_LEN] = {0};
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "GET(%s)", get_register_shadow(offset, size)->buffer);
+        VG_(snprintf)(dep, DEP_MAX_LEN, "GET(%s)", get_register_dep(offset, size));
 
         update_temporary_dep(tmp, dep, size);
     }
@@ -137,10 +132,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_GetI(UInt base, UInt ix, UInt 
 {
     UInt index = base+((ix+bias)%nElems);
 
-    if (get_reg_from_offset(index) != guest_INVALID)
-    {
-        VG_(tool_panic)("helper_instrument_WrTmp_GetI");
-    }
+    tl_assert(get_reg_from_offset(index) == guest_INVALID);
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp tmp_lhs, IRTemp tmp_rhs, UInt size)
 {
@@ -153,7 +145,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp tmp_lhs, IRTemp t
     {
         char dep[DEP_MAX_LEN] = {0};
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "RdTmp(%s)", get_temporary_shadow(tmp_rhs)->buffer);
+        VG_(snprintf)(dep, DEP_MAX_LEN, "RdTmp(%s)", get_temporary_dep(tmp_rhs));
 
         update_temporary_dep(tmp_lhs, dep, size);
     }
@@ -178,15 +170,15 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1,
 
         if (!IRTemp_is_tainted(arg1))
         {
-            VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%u,%s)", str, arg1_value, get_temporary_shadow(arg2)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%u,%s)", str, arg1_value, get_temporary_dep(arg2));
         }
         else if (!IRTemp_is_tainted(arg2))
         {
-            VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s,%u)", str, get_temporary_shadow(arg1)->buffer, arg2_value);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s,%u)", str, get_temporary_dep(arg1), arg2_value);
         }
         else
         {
-            VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s,%s)", str, get_temporary_shadow(arg1)->buffer, get_temporary_shadow(arg2)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s,%s)", str, get_temporary_dep(arg1), get_temporary_dep(arg2));
         }
 
         update_temporary_dep(tmp, dep, size);
@@ -210,7 +202,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Unop(IRTemp tmp, IRTemp arg, U
 
         IROp_to_str(op, str);
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s)", str, get_temporary_shadow(arg)->buffer);
+        VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s)", str, get_temporary_dep(arg));
 
         update_temporary_dep(tmp, dep, size);
     }
@@ -245,9 +237,9 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Const(IRTemp tmp)
     if (temporary_is_tainted(tmp))
     {
         flip_temporary(tmp);
-    }
 
-    free_temporary_dep(tmp);
+        free_temporary_dep(tmp);
+    }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition(IRTemp tmp, IRTemp cc_dep1, IRTemp cc_dep2, UInt cond, UInt cc_op_value, UInt cc_dep1_value, UInt cc_dep2_value)
 {
@@ -262,15 +254,15 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition
 
         if (!IRTemp_is_tainted(cc_dep1))
         {
-            VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %u, %s)", cond, cc_op_value, cc_dep1_value, get_temporary_shadow(cc_dep2)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %u, %s)", cond, cc_op_value, cc_dep1_value, get_temporary_dep(cc_dep2));
         }
         else if (!IRTemp_is_tainted(cc_dep2))
         {
-            VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %u)", cond, cc_op_value, get_temporary_shadow(cc_dep1)->buffer, cc_dep2_value);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %u)", cond, cc_op_value, get_temporary_dep(cc_dep1), cc_dep2_value);
         }
         else
         {
-            VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %s)", cond, cc_op_value, get_temporary_shadow(cc_dep1)->buffer, get_temporary_shadow(cc_dep2)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %s)", cond, cc_op_value, get_temporary_dep(cc_dep1), get_temporary_dep(cc_dep2));
         }
 
         update_temporary_dep(tmp, dep, 1); // 1 because x86g_calculate_condition returns 1 or 0
@@ -279,6 +271,10 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition
     {
         free_temporary_dep(tmp);
     }
+}
+static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_else()
+{
+    // VG_(printf)("helper_instrument_WrTmp_CCall_else\n");
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Mux0X(IRTemp tmp, UInt cond, IRTemp expr0, IRTemp exprX, UInt size)
 {
@@ -293,7 +289,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Mux0X(IRTemp tmp, UInt cond, I
     {
         char dep[DEP_MAX_LEN] = {0};
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "Mux0X(%s)", (cond == 0 ? get_temporary_shadow(expr0)->buffer : get_temporary_shadow(exprX)->buffer));
+        VG_(snprintf)(dep, DEP_MAX_LEN, "Mux0X(%s)", (cond == 0 ? get_temporary_dep(expr0) : get_temporary_dep(exprX)));
 
         update_temporary_dep(tmp, dep, size);
     }
@@ -313,7 +309,7 @@ static VG_REGPARM(0) void helper_instrument_Store(UInt addr, IRTemp data, UInt s
     {
         char dep[DEP_MAX_LEN] = {0};
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "STle(%s)", get_temporary_shadow(data)->buffer);
+        VG_(snprintf)(dep, DEP_MAX_LEN, "STle(%s)", get_temporary_dep(data));
 
         update_memory_dep(addr, dep, size);
     }
@@ -333,9 +329,9 @@ static VG_REGPARM(0) void helper_instrument_CAS_single_element(UInt addr, IRTemp
 
         if (IRTemp_is_tainted(dataLo))
         {
-            char dep[DEP_MAX_LEN];
+            char dep[DEP_MAX_LEN] = {0};
 
-            VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_shadow(dataLo)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_dep(dataLo));
 
             update_memory_dep(addr, dep, size);
         }
@@ -365,7 +361,7 @@ static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp
         {
             char dep[DEP_MAX_LEN] = {0};
 
-            VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_shadow(dataLo)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_dep(dataLo));
 
             update_memory_dep(addr, dep, size);
         }
@@ -378,7 +374,7 @@ static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp
         {
             char dep[DEP_MAX_LEN] = {0};
 
-            VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_shadow(dataHi)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_dep(dataHi));
 
             update_memory_dep(addr+size, dep, size);
         }
@@ -418,11 +414,11 @@ static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IR
             flip_memory(addr, size);
         }
 
-        if (memory_is_tainted(addr, size))
+        if (IRTemp_is_tainted(storedata))
         {
             char dep[DEP_MAX_LEN] = {0};
 
-            VG_(snprintf)(dep, DEP_MAX_LEN, "STle-Cond(%s)", get_temporary_shadow(storedata)->buffer);
+            VG_(snprintf)(dep, DEP_MAX_LEN, "STle-Cond(%s)", get_temporary_dep(storedata));
 
             update_memory_dep(addr, dep, size);
         }
@@ -439,14 +435,14 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt s
         if (register_is_tainted(offsIP, size))
         {
             flip_register(offsIP, size);
-        }
 
-        free_register_dep(offsIP, size);
+            free_register_dep(offsIP, size);
+        }
     }
 
     if (temporary_is_tainted(guard))
     {
-        VG_(printf)("\n\nbranch: %s\n\n", shadowTempArray[guard].buffer);
+        VG_(printf)("branch: %s\n\n", get_temporary_dep(guard));
     }
 }
 
@@ -723,6 +719,14 @@ void instrument_WrTmp_CCall(IRStmt* st, IRSB* sb_out)
                                              (cc_op->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, cc_op) : mkIRExpr_HWord(cc_op->Iex.Const.con->Ico.U32),
                                              (cc_dep1->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, cc_dep1) : mkIRExpr_HWord(cc_dep1->Iex.Const.con->Ico.U32),
                                              (cc_dep2->tag == Iex_RdTmp) ? assignNew_HWord(sb_out, cc_dep2) : mkIRExpr_HWord(cc_dep2->Iex.Const.con->Ico.U32))
+                               );
+        addStmtToIRSB(sb_out, IRStmt_Dirty(di));
+    }
+    else {
+        di = unsafeIRDirty_0_N(0,
+                               "helper_instrument_WrTmp_CCall_else",
+                               VG_(fnptr_to_fnentry)(helper_instrument_WrTmp_CCall_else),
+                               mkIRExprVec_0()
                                );
         addStmtToIRSB(sb_out, IRStmt_Dirty(di));
     }
@@ -1010,7 +1014,7 @@ void handle_sys_read(UWord* args, SysRes res)
                     flip_memory(((UInt)buf)+i, 8);
                 }
 
-                char dep[DEP_MAX_LEN];
+                char dep[DEP_MAX_LEN] = {0};
                 VG_(snprintf)(dep, DEP_MAX_LEN, "INPUT(%lu)", i);
 
                 update_memory_dep(((UInt)buf)+i, dep, 8);

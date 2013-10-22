@@ -9,8 +9,8 @@ void destroy_shadow_memory(void);
 
 /* SHADOW DATA STRUCTURE */
 
-#define DEP_MAX_LEN     1024
-#define DEP_MAX_SIZE    128
+#define DEP_MAX_LEN     2048
+#define DEP_MAX_SIZE    64
 
 typedef struct {
     char tainted;
@@ -79,7 +79,7 @@ Shadow registers32[TOTAL_SHADOW_REGISTERS];
 
 guest_register get_reg_from_offset(UInt offset);
 
-Shadow* get_register_shadow(UInt offset, UInt size);
+char* get_register_dep(UInt offset, UInt size);
 
 /* REGISTERS TAINT ANALYSIS */
 
@@ -106,7 +106,7 @@ void free_register_dep(UInt offset, UInt size);
 
 Shadow shadowTempArray[MAX_TEMPORARIES]; // a temporary is assigned before being used
 
-Shadow* get_temporary_shadow(IRTemp tmp);
+char* get_temporary_dep(IRTemp tmp);
 
 /* TEMPORARIES TAINT ANALYSIS */
 
