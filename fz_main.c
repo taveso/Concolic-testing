@@ -1,5 +1,6 @@
 #include "shadow_memory.h"
 #include "taint_analysis.h"
+#include "symbolic_execution.h"
 #include "util.h"
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
@@ -1005,12 +1006,14 @@ void handle_sys_read(UWord* args, SysRes res)
         fd = (int)args[0];
         buf = (void*)args[1];
 
-        if (fd == fd_to_taint) {
+        if (fd == fd_to_taint)
+        {
             VG_(printf)("read(%p) = %lu\n", buf, res._val);
 
             for (i = 0; i < res._val; i++)
             {
-                if (! memory_is_tainted(((UInt)buf)+i, 8)) {
+                if (!memory_is_tainted(((UInt)buf)+i, 8))
+                {
                     flip_memory(((UInt)buf)+i, 8);
                 }
 
@@ -1031,7 +1034,8 @@ void handle_sys_open(UWord* args, SysRes res)
     {
         pathname = (const char *)args[0];
 
-        if (VG_(strcmp)(pathname, TEST_FILE) == 0) {
+        if (VG_(strcmp)(pathname, TEST_FILE) == 0)
+        {
             VG_(printf)("open(\"%s\", ..) = %lu\n", pathname, res._val);
             fd_to_taint = res._val;
         }

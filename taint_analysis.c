@@ -26,6 +26,20 @@ char memory_is_tainted(UInt addr, UInt size)
     return 0;
 }
 
+void flip_memory(UInt addr, UInt size)
+{
+    Chunk* chunk;
+    int i;
+
+    for (i = 0; i < size/8; i++)
+    {
+        chunk = get_chunk_for_writing(addr+i);
+
+        chunk->bytes[(addr+i) & 0xffff].tainted ^= 1;
+    }
+}
+
+
 //
 //  REGISTERS
 //
@@ -65,6 +79,47 @@ char register_is_tainted(UInt offset, UInt size)
     }
 }
 
+void flip_register8(guest_register reg)
+{
+    registers8[reg].tainted ^= 1;
+}
+
+void flip_register16(guest_register reg)
+{
+    registers16[reg].tainted ^= 1;
+
+    registers8[reg].tainted = registers16[reg].tainted;
+}
+
+void flip_register32(guest_register reg)
+{
+    registers32[reg].tainted ^= 1;
+
+    registers8[reg].tainted = registers16[reg].tainted = registers32[reg].tainted;
+}
+
+void flip_register(UInt offset, UInt size)
+{
+    guest_register reg = get_reg_from_offset(offset);
+
+    tl_assert(reg != guest_INVALID);
+
+    switch (size)
+    {
+        case 8:
+            flip_register8(reg);
+            break;
+        case 16:
+            flip_register16(reg);
+            break;
+        case 32:
+            flip_register32(reg);
+            break;
+        default:
+            VG_(tool_panic)("flip_register");
+    }
+}
+
 //
 //  TEMPORARIES
 //
@@ -82,4 +137,11 @@ char IRTemp_is_tainted(IRTemp tmp)
         return 0;
     else
         return temporary_is_tainted(tmp);
+}
+
+void flip_temporary(IRTemp tmp)
+{
+    tl_assert(tmp < MAX_TEMPORARIES);
+
+    shadowTempArray[tmp].tainted ^= 1;
 }

@@ -8,17 +8,17 @@
 /* MEMORY */
 
 char memory_is_tainted(UInt addr, UInt size);
+void flip_memory(UInt addr, UInt size);
 
 /* REGISTERS */
 
-char register8_is_tainted(guest_register reg);
-char register16_is_tainted(guest_register reg);
-char register32_is_tainted(guest_register reg);
 char register_is_tainted(UInt offset, UInt size);
+void flip_register(UInt offset, UInt size);
 
 /* TEMPORARIES */
 
 char temporary_is_tainted(IRTemp tmp);
 char IRTemp_is_tainted(IRTemp tmp);
+void flip_temporary(IRTemp tmp);
 
 #endif // TAINT_ANALYSIS_H
