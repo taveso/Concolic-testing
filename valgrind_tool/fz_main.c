@@ -303,7 +303,7 @@ static VG_REGPARM(0) void helper_instrument_Store(UInt addr, IRTemp data, UInt s
 {
     if (memory_is_tainted(addr, size) != IRTemp_is_tainted(data))
     {
-        flip_memory(addr, size);
+        flip_memory(addr, size, IRTemp_is_tainted(data));
     }
 
     if (IRTemp_is_tainted(data))
@@ -325,7 +325,7 @@ static VG_REGPARM(0) void helper_instrument_CAS_single_element(UInt addr, IRTemp
     {
         if (memory_is_tainted(addr, size) != IRTemp_is_tainted(dataLo))
         {
-            flip_memory(addr, size);
+            flip_memory(addr, size, IRTemp_is_tainted(dataLo));
         }
 
         if (IRTemp_is_tainted(dataLo))
@@ -350,12 +350,12 @@ static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp
     {
         if (memory_is_tainted(addr, size) != IRTemp_is_tainted(dataLo))
         {
-            flip_memory(addr, size);
+            flip_memory(addr, size, IRTemp_is_tainted(dataLo));
         }
 
         if (memory_is_tainted(addr+size, size) != IRTemp_is_tainted(dataHi))
         {
-            flip_memory(addr+size, size);
+            flip_memory(addr+size, size, IRTemp_is_tainted(dataHi));
         }
 
         if (IRTemp_is_tainted(dataLo))
@@ -412,7 +412,7 @@ static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IR
     {
         if (memory_is_tainted(addr, size) != IRTemp_is_tainted(storedata))
         {
-            flip_memory(addr, size);
+            flip_memory(addr, size, IRTemp_is_tainted(storedata));
         }
 
         if (IRTemp_is_tainted(storedata))
@@ -676,7 +676,7 @@ void instrument_WrTmp_Const(IRStmt* st, IRSB* sb_out)
     cc_op
         add/sub/mul
         adc/sbb
-        shl/shr/sar
+        shl/Shl/sar
             tmp = cond(cc_op(cc_dep1, cc_dep2))
         and/or/xor
         inc/dec
@@ -1014,7 +1014,7 @@ void handle_sys_read(UWord* args, SysRes res)
             {
                 if (!memory_is_tainted(((UInt)buf)+i, 8))
                 {
-                    flip_memory(((UInt)buf)+i, 8);
+                    flip_memory(((UInt)buf)+i, 8, 1);
                 }
 
                 char dep[DEP_MAX_LEN] = {0};
@@ -1137,7 +1137,7 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
         }
     }
 
-    // ppIRSB(sb_in);
+    // ppIRSB(sb_out);
 
     return sb_out;
 }

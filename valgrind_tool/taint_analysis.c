@@ -26,7 +26,7 @@ char memory_is_tainted(UInt addr, UInt size)
     return 0;
 }
 
-void flip_memory(UInt addr, UInt size)
+void flip_memory(UInt addr, UInt size, char val)
 {
     Chunk* chunk;
     int i;
@@ -35,7 +35,8 @@ void flip_memory(UInt addr, UInt size)
     {
         chunk = get_chunk_for_writing(addr+i);
 
-        chunk->bytes[(addr+i) & 0xffff].tainted ^= 1;
+        chunk->bytes[(addr+i) & 0xffff].tainted = val;
+        // VG_(printf)("flip_memory: 0x%08x: %d -> %d (8)\n", addr, chunk->bytes[(addr+i) & 0xffff].tainted^1, chunk->bytes[(addr+i) & 0xffff].tainted);
     }
 }
 
@@ -82,11 +83,13 @@ char register_is_tainted(UInt offset, UInt size)
 void flip_register8(guest_register reg)
 {
     registers8[reg].tainted ^= 1;
+    // VG_(printf)("flip_register8: %d: %d -> %d\n", reg, registers8[reg].tainted^1, registers8[reg].tainted);
 }
 
 void flip_register16(guest_register reg)
 {
     registers16[reg].tainted ^= 1;
+    // VG_(printf)("flip_register16: %d: %d -> %d\n", reg, registers16[reg].tainted^1, registers16[reg].tainted);
 
     registers8[reg].tainted = registers16[reg].tainted;
 }
@@ -94,6 +97,7 @@ void flip_register16(guest_register reg)
 void flip_register32(guest_register reg)
 {
     registers32[reg].tainted ^= 1;
+    // VG_(printf)("flip_register32: %d: %d -> %d\n", reg, registers32[reg].tainted^1, registers32[reg].tainted);
 
     registers8[reg].tainted = registers16[reg].tainted = registers32[reg].tainted;
 }
@@ -144,4 +148,5 @@ void flip_temporary(IRTemp tmp)
     tl_assert(tmp < MAX_TEMPORARIES);
 
     shadowTempArray[tmp].tainted ^= 1;
+    // VG_(printf)("flip_temporary: %d: %d -> %d\n", tmp, shadowTempArray[tmp].tainted^1, shadowTempArray[tmp].tainted);
 }

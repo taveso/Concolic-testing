@@ -8,7 +8,7 @@
 /* MEMORY */
 
 char memory_is_tainted(UInt addr, UInt size);
-void flip_memory(UInt addr, UInt size);
+void flip_memory(UInt addr, UInt size, char val);
 
 /* REGISTERS */
 
