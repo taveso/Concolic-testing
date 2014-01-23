@@ -45,83 +45,24 @@ void flip_memory(UInt addr, UInt size, char val)
 //  REGISTERS
 //
 
-char register8_is_tainted(guest_register reg)
-{
-    return registers8[reg].tainted;
-}
-
-char register16_is_tainted(guest_register reg)
-{
-    return registers16[reg].tainted;
-}
-
-char register32_is_tainted(guest_register reg)
-{
-    return registers32[reg].tainted;
-}
-
-char register_is_tainted(UInt offset, UInt size)
+char register_is_tainted(UInt offset)
 {
     guest_register reg = get_reg_from_offset(offset);
 
     if (reg == guest_INVALID)
         return 0;
 
-    switch (size)
-    {
-        case 8:
-            return register8_is_tainted(reg);
-        case 16:
-            return register16_is_tainted(reg);
-        case 32:
-            return register32_is_tainted(reg);
-        default:
-            VG_(tool_panic)("register_is_tainted");
-    }
+    return registers[reg].tainted;
 }
 
-void flip_register8(guest_register reg)
-{
-    registers8[reg].tainted ^= 1;
-    // VG_(printf)("flip_register8: %d: %d -> %d\n", reg, registers8[reg].tainted^1, registers8[reg].tainted);
-}
-
-void flip_register16(guest_register reg)
-{
-    registers16[reg].tainted ^= 1;
-    // VG_(printf)("flip_register16: %d: %d -> %d\n", reg, registers16[reg].tainted^1, registers16[reg].tainted);
-
-    registers8[reg].tainted = registers16[reg].tainted;
-}
-
-void flip_register32(guest_register reg)
-{
-    registers32[reg].tainted ^= 1;
-    // VG_(printf)("flip_register32: %d: %d -> %d\n", reg, registers32[reg].tainted^1, registers32[reg].tainted);
-
-    registers8[reg].tainted = registers16[reg].tainted = registers32[reg].tainted;
-}
-
-void flip_register(UInt offset, UInt size)
+void flip_register(UInt offset)
 {
     guest_register reg = get_reg_from_offset(offset);
 
     tl_assert(reg != guest_INVALID);
 
-    switch (size)
-    {
-        case 8:
-            flip_register8(reg);
-            break;
-        case 16:
-            flip_register16(reg);
-            break;
-        case 32:
-            flip_register32(reg);
-            break;
-        default:
-            VG_(tool_panic)("flip_register");
-    }
+    registers[reg].tainted ^= 1;
+    // VG_(printf)("flip_register: %d: %d -> %d\n", offset, registers[reg].tainted^1, registers[reg].tainted);
 }
 
 //

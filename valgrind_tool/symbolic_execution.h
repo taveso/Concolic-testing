@@ -13,9 +13,9 @@ void free_memory_dep(UInt addr, UInt size);
 
 /* REGISTERS */
 
-char* get_register_dep(UInt offset, UInt size);
+char* get_register_dep(UInt offset);
 void update_register_dep(UInt offset, UInt size, char* dep);
-void free_register_dep(UInt offset, UInt size);
+void free_register_dep(UInt offset);
 
 /* TEMPORARIES */
 

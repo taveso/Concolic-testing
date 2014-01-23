@@ -208,7 +208,7 @@ void free_memory_dep(UInt addr, UInt size)
 //  REGISTERS
 //
 
-char* get_register_dep(UInt offset, UInt size)
+char* get_register_dep(UInt offset)
 {
     guest_register reg;
     Shadow shadow;
@@ -216,123 +216,26 @@ char* get_register_dep(UInt offset, UInt size)
     reg = get_reg_from_offset(offset);
     tl_assert(reg != guest_INVALID);
 
-    switch (size)
-    {
-        case 8:
-            shadow = registers8[reg];
-            break;
-        case 16:
-            shadow = registers16[reg];
-            break;
-        case 32:
-            shadow = registers32[reg];
-            break;
-        default:
-            VG_(tool_panic)("get_register_dep");
-    }
-
+    shadow = registers[reg];
     tl_assert(shadow.buffer != NULL);
+
     return shadow.buffer;
-}
-
-void update_register8_dep(guest_register reg, char* dep)
-{
-    char dep16[DEP_MAX_LEN] = {0};
-    char dep32[DEP_MAX_LEN] = {0};
-
-    VG_(snprintf)(dep16, DEP_MAX_LEN, "8to16_(%s)", dep);
-    VG_(snprintf)(dep32, DEP_MAX_LEN, "8to32_(%s)", dep);
-
-    update_dep(&registers8[reg], dep, 8);
-    update_dep(&registers16[reg], dep16, 16);
-    update_dep(&registers32[reg], dep32, 32);
-}
-
-void update_register16_dep(guest_register reg, char* dep)
-{
-    char dep8[DEP_MAX_LEN] = {0};
-    char dep32[DEP_MAX_LEN] = {0};
-
-    VG_(snprintf)(dep8, DEP_MAX_LEN, "16to8_(%s)", dep);
-    VG_(snprintf)(dep32, DEP_MAX_LEN, "16to32_(%s)", dep);
-
-    update_dep(&registers8[reg], dep8, 8);
-    update_dep(&registers16[reg], dep, 16);
-    update_dep(&registers32[reg], dep32, 32);
-}
-
-void update_register32_dep(guest_register reg, char* dep)
-{
-    char dep16[DEP_MAX_LEN] = {0};
-    char dep8[DEP_MAX_LEN] = {0};
-
-    VG_(snprintf)(dep16, DEP_MAX_LEN, "32to16_(%s)", dep);
-    VG_(snprintf)(dep8, DEP_MAX_LEN, "32to8_(%s)", dep);
-
-    update_dep(&registers8[reg], dep8, 8);
-    update_dep(&registers16[reg], dep16, 16);
-    update_dep(&registers32[reg], dep, 32);
 }
 
 void update_register_dep(UInt offset, UInt size, char* dep)
 {
     guest_register reg = get_reg_from_offset(offset);
-
     tl_assert(reg != guest_INVALID);
 
-    switch (size)
-    {
-        case 8:
-            update_register8_dep(reg, dep);
-            break;
-        case 16:
-            update_register16_dep(reg, dep);
-            break;
-        case 32:
-            update_register32_dep(reg, dep);
-            break;
-        default:
-            VG_(tool_panic)("update_register_dep");
-    }
+    update_dep(&registers[reg], dep, size);
 }
 
-void free_register8_dep(guest_register reg)
-{
-    free_dep(&registers8[reg]);
-}
-
-void free_register16_dep(guest_register reg)
-{
-    free_dep(&registers16[reg]);
-    free_register8_dep(reg);
-}
-
-void free_register32_dep(guest_register reg)
-{
-    free_dep(&registers32[reg]);
-    free_register16_dep(reg);
-}
-
-void free_register_dep(UInt offset, UInt size)
+void free_register_dep(UInt offset)
 {
     guest_register reg = get_reg_from_offset(offset);
-
     tl_assert(reg != guest_INVALID);
 
-    switch (size)
-    {
-        case 8:
-            free_register8_dep(reg);
-            break;
-        case 16:
-            free_register16_dep(reg);
-            break;
-        case 32:
-            free_register32_dep(reg);
-            break;
-        default:
-            VG_(tool_panic)("free_register_dep");
-    }
+    free_dep(&registers[reg]);
 }
 
 //

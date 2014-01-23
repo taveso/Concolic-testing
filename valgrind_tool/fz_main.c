@@ -85,9 +85,9 @@ static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt s
         return;
     }
 
-    if (register_is_tainted(offset, size) != IRTemp_is_tainted(data))
+    if (register_is_tainted(offset) != IRTemp_is_tainted(data))
     {
-        flip_register(offset, size);
+        flip_register(offset);
     }
 
     if (IRTemp_is_tainted(data))
@@ -100,7 +100,7 @@ static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt s
     }
     else
     {
-        free_register_dep(offset, size);
+        free_register_dep(offset);
     }
 }
 static VG_REGPARM(0) void helper_instrument_PutI(UInt base, UInt ix, UInt bias, UInt nElems)
@@ -111,16 +111,16 @@ static VG_REGPARM(0) void helper_instrument_PutI(UInt base, UInt ix, UInt bias, 
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, UInt size)
 {
-    if (temporary_is_tainted(tmp) != register_is_tainted(offset, size))
+    if (temporary_is_tainted(tmp) != register_is_tainted(offset))
     {
         flip_temporary(tmp);
     }
 
-    if (register_is_tainted(offset, size))
+    if (register_is_tainted(offset))
     {
         char dep[DEP_MAX_LEN] = {0};
 
-        VG_(snprintf)(dep, DEP_MAX_LEN, "GET(%s)", get_register_dep(offset, size));
+        VG_(snprintf)(dep, DEP_MAX_LEN, "GET(%s)", get_register_dep(offset));
 
         update_temporary_dep(tmp, dep, size);
     }
@@ -433,11 +433,11 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt s
 {
     if (taken)
     {
-        if (register_is_tainted(offsIP, size))
+        if (register_is_tainted(offsIP))
         {
-            flip_register(offsIP, size);
+            flip_register(offsIP);
 
-            free_register_dep(offsIP, size);
+            free_register_dep(offsIP);
         }
     }
 

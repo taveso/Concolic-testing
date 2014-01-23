@@ -8,9 +8,7 @@ void init_shadow_memory(void)
 {
     VG_(memset)(MemoryMap, 0, sizeof(Chunk*)*MMAP_SIZE);
 
-    VG_(memset)(registers8, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
-    VG_(memset)(registers16, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
-    VG_(memset)(registers32, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
+    VG_(memset)(registers, 0, sizeof(Shadow)*TOTAL_SHADOW_REGISTERS);
 
     VG_(memset)(shadowTempArray, 0, sizeof(Shadow)*MAX_TEMPORARIES);
 }

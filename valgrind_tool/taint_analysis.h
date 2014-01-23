@@ -12,8 +12,8 @@ void flip_memory(UInt addr, UInt size, char val);
 
 /* REGISTERS */
 
-char register_is_tainted(UInt offset, UInt size);
-void flip_register(UInt offset, UInt size);
+char register_is_tainted(UInt offset);
+void flip_register(UInt offset);
 
 /* TEMPORARIES */
 

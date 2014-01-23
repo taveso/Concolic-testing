@@ -55,9 +55,7 @@ typedef enum {guest_EAX,
               guest_EIP,
               guest_INVALID} guest_register;
 
-Shadow registers8[TOTAL_SHADOW_REGISTERS];
-Shadow registers16[TOTAL_SHADOW_REGISTERS];
-Shadow registers32[TOTAL_SHADOW_REGISTERS];
+Shadow registers[TOTAL_SHADOW_REGISTERS];
 
 guest_register get_reg_from_offset(UInt offset);
 
