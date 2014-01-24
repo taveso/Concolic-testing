@@ -68,7 +68,7 @@ class Operation:
 	def Sar(self):
 		return self.z3_binop_func('LShR')
 	def Div(self):
-		return self.z3_binop_func('UDiv')
+		return self.z3_binop('/')
 		
 	def _32HLto64(self):
 		return '%s = %s' % (self.dest_op, self.second_op)

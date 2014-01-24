@@ -32,18 +32,34 @@ def check_operand_size(operand, operation_size, l):
 			operand = resize(operand, operand_size, operation_size, l)
 	
 	return operand
+	
+def replace_operand(oldoperand, valgrind_operations, valgrind_op_after_resize):
+	newoperand = resize(oldoperand, int(size_by_var[oldoperand]), int(realsize_by_var[oldoperand]), valgrind_op_after_resize)
+	
+	for i, (operation, first_operand, second_operand, dest_operand) in enumerate(valgrind_operations):
+		if first_operand == oldoperand:
+			valgrind_operations[i] = (operation, newoperand, second_operand, dest_operand)
+		if second_operand == oldoperand:
+			valgrind_operations[i] = (operation, first_operand, newoperand, dest_operand)
+		if dest_operand == oldoperand:
+			valgrind_operations[i] = (operation, first_operand, second_operand, newoperand)
 
 def check_operands_size():
 	global valgrind_operations, size_by_var	
 	valgrind_op_after_resize = []
 	
-	for operation, first_operand, second_operand, dest_operand in valgrind_operations:		
-		m = re.match('(Add|Sub|Mul|DivModS\d+to)(\d+)', operation)
+	for operation, first_operand, second_operand, dest_operand in valgrind_operations:
+		m = re.match('^Sar\d+_$', operation)
 		if m:
-			first_operand = check_operand_size(first_operand, int(size_by_var[dest_operand]), valgrind_op_after_resize)
-			second_operand = check_operand_size(second_operand, int(size_by_var[dest_operand]), valgrind_op_after_resize)
+			valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))		
+			replace_operand(first_operand, valgrind_operations, valgrind_op_after_resize)
+		else:		
+			m = re.match('(Add|Sub|Mul|DivModS\d+to)(\d+)', operation)
+			if m:
+				first_operand = check_operand_size(first_operand, int(size_by_var[dest_operand]), valgrind_op_after_resize)
+				second_operand = check_operand_size(second_operand, int(size_by_var[dest_operand]), valgrind_op_after_resize)
 		
-		valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))
+			valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))
 		
 	valgrind_operations = valgrind_op_after_resize
 	
@@ -58,6 +74,7 @@ def parse_function(s, loc, toks):
 	
 	operation = toks[0]
 	string = ''.join(toks)
+	# print string
 	
 	m = re.match('^INPUT\((\d+)\)$', string)
 	if m:
@@ -71,7 +88,7 @@ def parse_function(s, loc, toks):
 		if m:
 			m = re.match('^LDle:(\d+)$', operation)
 			if m:
-				if var not in size_by_var:
+				if (var not in size_by_var) or ((var in size_by_var) and (var not in shift_by_var)):
 					size_by_var[var] = int(m.group(1))
 				realsize_by_var[var] = int(m.group(1))
 			
@@ -80,7 +97,7 @@ def parse_function(s, loc, toks):
 			
 		m = re.match('^[a-zA-Z0-9:_]+\(%s,(\d+)\)$'%re.escape(constraint), string)
 		if m:
-			mm = re.match('^Shr\d+_$', operation)
+			mm = re.match('^Sar\d+_$', operation)
 			if mm:
 				shift_by_var[var] = int(m.group(1))
 		

@@ -72,7 +72,7 @@ def dump(valgrind_operations, size_by_var):
 
 def solve(offset_by_var, realsize_by_var, shift_by_var):
 	global z3_file
-	offsets_values_oldsize_and_newsize = []
+	offsets_values_sizes = []
 
 	res = commands.getoutput('python '+z3_file)
 	print res
@@ -92,6 +92,6 @@ def solve(offset_by_var, realsize_by_var, shift_by_var):
 					value >>= shift_by_var[var]
 					offset += shift_by_var[var]/8
 					
-				offsets_values_oldsize_and_newsize.append((offset, value, size))
+				offsets_values_sizes.append((offset, value, size))
 	
-	return offsets_values_oldsize_and_newsize
+	return offsets_values_sizes
