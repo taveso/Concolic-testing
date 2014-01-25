@@ -61,24 +61,38 @@ Chunk* get_chunk_for_writing(UInt addr)
 
 guest_register get_reg_from_offset(UInt offset)
 {
-    switch (offset)
-    {
-        case 8: return guest_EAX;
-        case 12: return guest_ECX;
-        case 16: return guest_EDX;
-        case 20: return guest_EBX;
-        case 24: return guest_ESP;
-        case 28: return guest_EBP;
-        case 32: return guest_ESI;
-        case 36: return guest_EDI;
-        case 40: return guest_CC_OP;
-        case 44: return guest_CC_DEP1;
-        case 48: return guest_CC_DEP2;
-        case 52: return guest_CC_NDEP;
-        case 56: return guest_DFLAG;
-        case 60: return guest_IDFLAG;
-        case 64: return guest_ACFLAG;
-        case 68: return guest_EIP;
-        default: return guest_INVALID;
-    }
+    if (offset >= 8 && offset < 12)
+        return guest_EAX;
+    else if (offset >= 12 && offset < 16)
+        return guest_ECX;
+    else if (offset >= 16 && offset < 20)
+        return guest_EDX;
+    else if (offset >= 20 && offset < 24)
+        return guest_EBX;
+    else if (offset >= 24 && offset < 28)
+        return guest_ESP;
+    else if (offset >= 28 && offset < 32)
+        return guest_EBP;
+    else if (offset >= 32 && offset < 36)
+        return guest_ESI;
+    else if (offset >= 36 && offset < 40)
+        return guest_EDI;
+    else if (offset >= 40 && offset < 44)
+        return guest_CC_OP;
+    else if (offset >= 44 && offset < 48)
+        return guest_CC_DEP1;
+    else if (offset >= 48 && offset < 52)
+        return guest_CC_DEP2;
+    else if (offset >= 52 && offset < 56)
+        return guest_CC_NDEP;
+    else if (offset >= 56 && offset < 60)
+        return guest_DFLAG;
+    else if (offset >= 60 && offset < 64)
+        return guest_IDFLAG;
+    else if (offset >= 64 && offset < 68)
+        return guest_ACFLAG;
+    else if (offset >= 68 && offset < 72)
+        return guest_EIP;
+    else
+        return guest_INVALID;
 }
