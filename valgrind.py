@@ -46,8 +46,8 @@ class Operation:
 		
 	def z3_binop(self, op):
 		return '%s = %s %s %s' % (self.dest_op, self.first_op, op, self.second_op)
-	def z3_binop_func(self, op):
-		return '%s = %s(%s,%s)' % (self.dest_op, op, self.first_op, self.second_op)
+	def z3_binop_unsigned(self, op):
+		return '%s = %s(%s, %s)' % (self.dest_op, op, self.first_op, self.second_op)
 
 	def Add(self):
 		return self.z3_binop('+')
@@ -55,6 +55,8 @@ class Operation:
 		return self.z3_binop('-')
 	def Mul(self):
 		return self.z3_binop('*')
+	def DivModS(self):
+		return self.z3_binop('/')
 	def Or(self):
 		return self.z3_binop('|')
 	def And(self):
@@ -66,9 +68,13 @@ class Operation:
 	def Shr(self):
 		return self.z3_binop('>>')
 	def Sar(self):
-		return self.z3_binop_func('LShR')
-	def Div(self):
-		return self.z3_binop('/')
+		return self.z3_binop_unsigned('LShR')
+	def DivModU(self):
+		return self.z3_binop_unsigned('UDiv')
 		
-	def _32HLto64(self):
+	'''	
+		c = a/b: 64to32(DivModS64to32(32HLto64(Sar32(a,31), a), b))
+	'''
+	def HLto(self):
 		return '%s = %s' % (self.dest_op, self.second_op)
+

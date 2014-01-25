@@ -24,8 +24,6 @@ def alter_file(offsets_values_sizes):
 				f.write(struct.pack('<H', value))
 			elif size == 32:
 				f.write(struct.pack('<I', value))
-	
-	# print commands.getoutput('hexdump %s' % test_file)
 
 def process_constraint(constraint):
 	global test_bin
@@ -33,7 +31,7 @@ def process_constraint(constraint):
 	valgrind_operations, size_by_var, offset_by_var, realsize_by_var, shift_by_var = parser.parse_constraint(constraint)
 	
 	_z3.dump(valgrind_operations, size_by_var)	
-	offsets_values_sizes = _z3.solve(offset_by_var, realsize_by_var, shift_by_var)
+	offsets_values_sizes = _z3.solve(offset_by_var, size_by_var, realsize_by_var, shift_by_var)
 	
 	alter_file(offsets_values_sizes)
 	print commands.getoutput(test_bin)
@@ -48,6 +46,11 @@ def lead(target, infile):
 	test_bin = target
 	test_file = infile
 
+	commands.getoutput('echo "AAAAAAAAAAAAAAAA" > %s' % test_file)
 	valgrind.run(target)
 	constraints = valgrind.parse_outfile()
+	'''
+	constraints = ['']
+	'''
 	process_constraints(constraints)
+

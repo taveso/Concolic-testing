@@ -4,9 +4,11 @@ import re
 var_cnt = 0
 constraint_by_var = None
 offset_by_var = None
+size_by_var = None
 realsize_by_var = None
 shift_by_var = None
-size_by_var = None
+signedness_by_var = None
+cast_signedness_by_var = None
 valgrind_operations = None
 
 def new_var():
@@ -14,50 +16,61 @@ def new_var():
 	var_cnt += 1
 	return '_%d' % var_cnt
 
-def resize(oldvar, oldsize, newsize, l):
-	global size_by_var	
+def resize(oldvar, oldsize, newsize, signedness, valgrind_op_after_resize):
+	global size_by_var, signedness_by_var
 	
 	newvar = new_var()
 	size_by_var[newvar] = newsize
-	l.append(('assign', newvar, oldvar, (oldsize,newsize)))
+	signedness_by_var[newvar] = signedness
+	
+	valgrind_op_after_resize.append(('assign', newvar, oldvar, (oldsize, newsize, signedness)))
 	
 	return newvar
 
-def check_operand_size(operand, operation_size, l):
-	global size_by_var	
+def check_operand_size(operand, operation_size, valgrind_op_after_resize):
+	global size_by_var, signedness_by_var
 	
 	if operand in size_by_var:
-		operand_size = int(size_by_var[operand])
+		operand_size = size_by_var[operand]
 		if operand_size != operation_size:
-			operand = resize(operand, operand_size, operation_size, l)
+			operand = resize(operand, operand_size, operation_size, signedness_by_var[operand], valgrind_op_after_resize)
 	
 	return operand
 	
-def replace_operand(oldoperand, valgrind_operations, valgrind_op_after_resize):
-	newoperand = resize(oldoperand, int(size_by_var[oldoperand]), int(realsize_by_var[oldoperand]), valgrind_op_after_resize)
+def is_arithmetic_operation(operation):
+	return re.match('(Add|Sub|Mul|Or|And|Xor|Shl|Shr|Sar|DivMod[S|U]\d+to)\d+', operation)
 	
-	for i, (operation, first_operand, second_operand, dest_operand) in enumerate(valgrind_operations):
-		if first_operand == oldoperand:
-			valgrind_operations[i] = (operation, newoperand, second_operand, dest_operand)
-		if second_operand == oldoperand:
-			valgrind_operations[i] = (operation, first_operand, newoperand, dest_operand)
-		if dest_operand == oldoperand:
-			valgrind_operations[i] = (operation, first_operand, second_operand, newoperand)
+def replace_operand(oldoperand, i, valgrind_op_after_resize):
+	global size_by_var, realsize_by_var, cast_signedness_by_var, valgrind_operations
+	
+	size = size_by_var[oldoperand]
+	realsize = realsize_by_var[oldoperand]
+	
+	if size != realsize:
+		newoperand = resize(oldoperand, size, realsize, cast_signedness_by_var[oldoperand], valgrind_op_after_resize)
+		
+		for j in range(i, len(valgrind_operations)):
+			operation, first_operand, second_operand, dest_operand = valgrind_operations[j]
+			
+			first_operand = newoperand if (first_operand == oldoperand) else first_operand
+			second_operand = newoperand if (second_operand == oldoperand) else second_operand
+			dest_operand = newoperand if (dest_operand == oldoperand) else dest_operand
+		
+			valgrind_operations[j] = (operation, first_operand, second_operand, dest_operand)
 
-def check_operands_size():
-	global valgrind_operations, size_by_var	
+def resize_operands():
+	global valgrind_operations, size_by_var
 	valgrind_op_after_resize = []
 	
-	for operation, first_operand, second_operand, dest_operand in valgrind_operations:
+	for i, (operation, first_operand, second_operand, dest_operand) in enumerate(valgrind_operations):
 		m = re.match('^Sar\d+_$', operation)
 		if m:
-			valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))		
-			replace_operand(first_operand, valgrind_operations, valgrind_op_after_resize)
+			valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))	
+			replace_operand(first_operand, i, valgrind_op_after_resize)		
 		else:		
-			m = re.match('(Add|Sub|Mul|DivModS\d+to)(\d+)', operation)
-			if m:
-				first_operand = check_operand_size(first_operand, int(size_by_var[dest_operand]), valgrind_op_after_resize)
-				second_operand = check_operand_size(second_operand, int(size_by_var[dest_operand]), valgrind_op_after_resize)
+			if is_arithmetic_operation(operation):
+				first_operand = check_operand_size(first_operand, size_by_var[dest_operand], valgrind_op_after_resize)
+				second_operand = check_operand_size(second_operand, size_by_var[dest_operand], valgrind_op_after_resize)
 		
 			valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))
 		
@@ -68,9 +81,29 @@ def add_operation(operation, first_operand, second_operand, dest_operand, constr
 	
 	valgrind_operations.append((operation, first_operand, second_operand, dest_operand))
 	constraint_by_var[dest_operand] = constraint
-
+	
+def update_var_size_ldle(var, size):
+	global size_by_var, realsize_by_var, shift_by_var
+	
+	if var not in size_by_var:
+		size_by_var[var] = size
+	elif (var in size_by_var) and (var not in shift_by_var) and (var not in realsize_by_var):
+		size_by_var[var] = realsize_by_var[var] = size
+	elif (var in size_by_var) and (var in shift_by_var) and (var not in realsize_by_var):
+		realsize_by_var[var] = size
+		
+def update_var_size_cast(var, size, signedness):
+	global size_by_var, realsize_by_var, shift_by_var, cast_signedness_by_var
+	
+	if (var in realsize_by_var) and (var not in shift_by_var):
+		size_by_var[var] = realsize_by_var[var] = size
+		signedness_by_var[var] = signedness
+	elif (var in realsize_by_var) and (var in shift_by_var):
+		realsize_by_var[var] = size
+		cast_signedness_by_var[var] = signedness
+	
 def parse_function(s, loc, toks):
-	global constraint_by_var, offset_by_var, size_by_var, realsize_by_var
+	global constraint_by_var, offset_by_var, signedness_by_var
 	
 	operation = toks[0]
 	string = ''.join(toks)
@@ -81,16 +114,19 @@ def parse_function(s, loc, toks):
 		newvar = new_var()
 		constraint_by_var[newvar] = string
 		offset_by_var[newvar] = int(m.group(1))
+		signedness_by_var[newvar] = 'S'
 		return
 		
 	for var, constraint in constraint_by_var.iteritems():
-		m = re.match('^[a-zA-Z0-9:_]+\(%s\)$'%re.escape(constraint), string)
+		m = re.match('^[a-zA-Z0-9:]+\(%s\)$'%re.escape(constraint), string)
 		if m:
 			m = re.match('^LDle:(\d+)$', operation)
 			if m:
-				if (var not in size_by_var) or ((var in size_by_var) and (var not in shift_by_var)):
-					size_by_var[var] = int(m.group(1))
-				realsize_by_var[var] = int(m.group(1))
+				update_var_size_ldle(var, int(m.group(1)))
+			
+			m = re.match('^(\d+)([U|S])to\d+$', operation)
+			if m:
+				update_var_size_cast(var, int(m.group(1)), m.group(2))
 			
 			add_operation(operation, var, None, var, string)			
 			return
@@ -99,14 +135,21 @@ def parse_function(s, loc, toks):
 		if m:
 			mm = re.match('^Sar\d+_$', operation)
 			if mm:
+				dest_operand = var
 				shift_by_var[var] = int(m.group(1))
-		
-			dest_operand = new_var() if re.match('(Add|Sub|Mul|DivModS\d+to)\d+', operation) else var
+			else:
+				dest_operand = new_var()			
+				size_by_var[dest_operand] = realsize_by_var.get(var, size_by_var[var])				
+				signedness_by_var[dest_operand] = signedness_by_var[var]
+			
 			add_operation(operation, var, m.group(1), dest_operand, string)
 			return		
-		m = re.match('^[a-zA-Z0-9:_]+\((\d+),%s\)$'%re.escape(constraint), string)
+		m = re.match('^[a-zA-Z0-9:]+\((\d+),%s\)$'%re.escape(constraint), string)
 		if m:
-			dest_operand = new_var() if re.match('(Add|Sub|Mul|DivModS\d+to)\d+', operation) else var
+			dest_operand = new_var()			
+			size_by_var[dest_operand] = realsize_by_var.get(var, size_by_var[var])			
+			signedness_by_var[dest_operand] = signedness_by_var[var]
+			
 			add_operation(operation, m.group(1), var, dest_operand, string)
 			return
 			
@@ -114,19 +157,27 @@ def parse_function(s, loc, toks):
 		for var2,constraint2 in constraint_by_var.iteritems():
 			m = re.match('^[a-zA-Z0-9:]+\(%s,%s\)$'%(re.escape(constraint1),re.escape(constraint2)), string)
 			if m:
-				add_operation(operation, var1, var2, new_var(), string)
+				if operation == '\d+HLto\d+':
+					dest_operand = var2
+				else:
+					dest_operand = new_var()
+					signedness_by_var[dest_operand] = 'S'
+					
+				add_operation(operation, var1, var2, dest_operand, string)
 				return
 				
 def init_global_vars():
-	global var_cnt, constraint_by_var	
+	global var_cnt, constraint_by_var, signedness_by_var, cast_signedness_by_var
 	global valgrind_operations, size_by_var, offset_by_var, realsize_by_var, shift_by_var
 	
 	var_cnt = 0
 	constraint_by_var = {}
 	offset_by_var = {}
+	size_by_var = {}
 	realsize_by_var = {}
 	shift_by_var = {}
-	size_by_var = {}
+	signedness_by_var = {}
+	cast_signedness_by_var = {}
 	valgrind_operations = []
 	
 def parse_constraint(constraint):
@@ -150,6 +201,6 @@ def parse_constraint(constraint):
 	
 	expression.parseString(constraint)
 	
-	check_operands_size()
+	resize_operands()
 	
 	return (valgrind_operations, size_by_var, offset_by_var, realsize_by_var, shift_by_var)
