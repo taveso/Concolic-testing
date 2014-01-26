@@ -38,7 +38,7 @@ def check_operand_size(operand, operation_size, valgrind_op_after_resize):
 	return operand
 	
 def is_arithmetic_operation(operation):
-	return re.match('(Add|Sub|Mul|Or|And|Xor|Shl|Shr|Sar|DivMod[S|U]\d+to)\d+', operation)
+	return re.match('(Add|Sub|Mul|Shl|Shr|Sar|Div(?:Mod)?[S|U]|Or|And|Xor)\d+', operation)
 	
 def replace_operand(oldoperand, i, valgrind_op_after_resize):
 	global size_by_var, realsize_by_var, cast_signedness_by_var, valgrind_operations
@@ -118,7 +118,7 @@ def parse_function(s, loc, toks):
 		return
 		
 	for var, constraint in constraint_by_var.iteritems():
-		m = re.match('^[a-zA-Z0-9:]+\(%s\)$'%re.escape(constraint), string)
+		m = re.match('^[a-zA-Z0-9:_]+\(%s\)$'%re.escape(constraint), string)
 		if m:
 			m = re.match('^LDle:(\d+)$', operation)
 			if m:
@@ -151,6 +151,11 @@ def parse_function(s, loc, toks):
 			signedness_by_var[dest_operand] = signedness_by_var[var]
 			
 			add_operation(operation, m.group(1), var, dest_operand, string)
+			return
+			
+		m = re.match('^x86g_calculate_condition\((\d+),\d+,%s,(\d+)\)$'%re.escape(constraint), string)
+		if m:
+			add_operation(operation, int(m.group(1)), var, int(m.group(2)), string)
 			return
 			
 	for var1,constraint1 in constraint_by_var.iteritems():
