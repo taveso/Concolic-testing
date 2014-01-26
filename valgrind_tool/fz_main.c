@@ -266,7 +266,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition
             VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %s)", cond, cc_op_value, get_temporary_dep(cc_dep1), get_temporary_dep(cc_dep2));
         }
 
-        update_temporary_dep(tmp, dep, 1); // 1 because x86g_calculate_condition returns 1 or 0
+        update_temporary_dep(tmp, dep, 32); // 1 because x86g_calculate_condition returns UInt
     }
     else
     {
@@ -429,9 +429,9 @@ static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IR
         }
     }
 }
-static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt size, UInt guard)
+static VG_REGPARM(0) void helper_instrument_Exit(UInt branch_is_taken, UInt offsIP, UInt size, UInt guard)
 {
-    if (taken)
+    if (branch_is_taken)
     {
         if (register_is_tainted(offsIP))
         {
@@ -443,7 +443,12 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt taken, UInt offsIP, UInt s
 
     if (temporary_is_tainted(guard))
     {
-        VG_(printf)("branch: %s\n\n", get_temporary_dep(guard));
+        char* dep = get_temporary_dep(guard);
+
+        if (branch_is_taken)
+            VG_(printf)("branch: Not_(%s)\n\n", dep);
+        else
+            VG_(printf)("branch: %s\n\n", dep);
     }
 }
 
