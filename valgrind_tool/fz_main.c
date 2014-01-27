@@ -446,9 +446,22 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt branch_is_taken, UInt offs
         char* dep = get_temporary_dep(guard);
 
         if (branch_is_taken)
-            VG_(printf)("branch: Not_(%s)\n\n", dep);
-        else
             VG_(printf)("branch: %s\n\n", dep);
+        else
+            VG_(printf)("branch: Not_(%s)\n\n", dep);
+    }
+}
+static VG_REGPARM(0) void helper_instrument_superblock()
+{
+    unsigned int i;
+
+    for (i = 0; i < MAX_TEMPORARIES; i++)
+    {
+        if (temporary_is_tainted(i))
+        {
+            flip_temporary(i);
+            free_temporary_dep(i);
+        }
     }
 }
 
@@ -1082,6 +1095,7 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
 {
     Int i;
     IRSB* sb_out;
+    IRDirty* di;
 
     if (gWordTy != hWordTy) {
         /* We don't currently support this case. */
@@ -1097,6 +1111,13 @@ IRSB* fz_instrument ( VgCallbackClosure* closure,
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
         i++;
     }
+
+    di = unsafeIRDirty_0_N(0,
+                           "helper_instrument_superblock",
+                           VG_(fnptr_to_fnentry)(helper_instrument_superblock),
+                           mkIRExprVec_0()
+                           );
+    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 
     for (/*use current i*/; i < sb_in->stmts_used; i++)
     {
