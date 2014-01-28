@@ -447,9 +447,9 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt branch_is_taken, UInt offs
         char* dep = get_temporary_dep(guard);
 
         if (branch_is_taken)
-            VG_(printf)("branch: %s\n\n", dep);
+            VG_(printf)("branch: TAKEN(%s)\n\n", dep);
         else
-            VG_(printf)("branch: Not_(%s)\n\n", dep);
+            VG_(printf)("branch: NOT_TAKEN(%s)\n\n", dep);
     }
 }
 static VG_REGPARM(0) void helper_instrument_superblock()

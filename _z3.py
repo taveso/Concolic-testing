@@ -50,14 +50,14 @@ def translate_valgrind_operations_group(valgrind_operations_group):
 			
 			m = re.match('(Cmp(?:EQ|NE|LT|LE))\d+(S|U)?', operation)
 			if m:
-				op = m.group(1)+m.group(2) if m.group(2) else m.group(1)			
+				op = m.group(1)+m.group(2) if m.group(2) else m.group(1)
 				negate_constraint = any(item[0] == 'Not_' for item in valgrind_operations[i:])
 				z3_constraints.append(valgrind.Operation(op, first_op, second_op, negate_constraint).to_z3())
 				break
 		
 			if operation == 'x86g_calculate_condition':
-				op = valgrind.X86Condcode[first_op]			
-				negate_constraint = any(item[0] == 'Not_' for item in valgrind_operations[i:])	
+				op = valgrind.X86Condcode[first_op]		
+				negate_constraint = any(item[0] == 'Not_' for item in valgrind_operations[i:])
 				z3_constraints.append(valgrind.Operation(op, second_op, dest_op, negate_constraint).to_z3())
 				break
 	
@@ -74,11 +74,10 @@ def dump(valgrind_operations_group, size_by_var):
 		f.write("%s = BitVec('%s', %d)\n" % (var, var, size))
 	f.write('\n')
 	for op in z3_operations:
-		f.write(op+'\n')	
-	f.write('s.add(Not(And(')
-	for constraint in reversed(z3_constraints):
-		f.write(constraint+',')
-	f.write(')))')	
+		f.write(op+'\n')
+	f.write('\n')
+	for constraint in z3_constraints:
+		f.write(constraint+'\n')
 	f.write(z3_epilogue)
 	f.close()
 	

@@ -36,28 +36,24 @@ def parse_outfile():
 	
 	return constraints
 
-def constraint_is_new(constraint):
-	global satisfied_constraints_hashes
-	
-	constraint_hash = hashlib.md5(constraint).hexdigest()
-	
-	if constraint_hash not in satisfied_constraints_hashes:
-		satisfied_constraints_hashes.add(constraint_hash)
-		return True		
-	return False
-
 def create_constraint_groups(constraints):
+	global satisfied_constraints_hashes
 	constraint_groups = []
-	satisfied_constraints = []
+	execution_path = []
 	
 	for constraint in constraints:
-		if not re.search('^Not_.+', constraint):
-			satisfied_constraints.append(constraint)
-		else:
-			if constraint_is_new(constraint):
-				tmp = satisfied_constraints[:]
-				tmp.append(constraint)
-				constraint_groups.append(tmp)
+		taken = re.search('^TAKEN.+', constraint)
+		constraint = constraint[6:-1] if re.search('^TAKEN.+', constraint) else constraint[10:-1]
+		constraint_hash = hashlib.md5(constraint).hexdigest()
+		
+		if constraint_hash not in satisfied_constraints_hashes:
+			tmp = execution_path[:]
+			tmp.append('Not_(%s)'%constraint if taken else constraint)
+			constraint_groups.append(tmp)		
+			satisfied_constraints_hashes.add(constraint_hash)
+		
+		if taken:
+			execution_path.append(constraint)
 	
 	return constraint_groups
 	
@@ -90,9 +86,15 @@ class Operation:
 		return '%s = %s(%s, %s)' % (self.dest_op, op, self.first_op, self.second_op)
 		
 	def z3_cmp(self, op):
-		return '%s(%s %s %s)' % ('Not' if self.dest_op else '', self.first_op, op, self.second_op)
+		if self.dest_op:
+			return 's.add(Not(%s %s %s))' % (self.first_op, op, self.second_op)
+		else:
+			return 's.add(%s %s %s)' % (self.first_op, op, self.second_op)
 	def z3_cmp_unsigned(self, op):
-		return '%s(%s(%s, %s))' % ('Not' if self.dest_op else '', op, self.first_op, self.second_op)
+		if self.dest_op:
+			return 's.add(Not(%s(%s, %s)))' % (op, self.first_op, self.second_op)
+		else:
+			return 's.add(%s(%s, %s))' % (op, self.first_op, self.second_op)
 
 	def Add(self):
 		return self.z3_binop('+')
