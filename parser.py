@@ -71,7 +71,7 @@ def resize_operands():
 			if is_arithmetic_operation(operation):
 				first_operand = check_operand_size(first_operand, size_by_var[dest_operand], valgrind_op_after_resize)
 				second_operand = check_operand_size(second_operand, size_by_var[dest_operand], valgrind_op_after_resize)
-		
+	
 			valgrind_op_after_resize.append((operation, first_operand, second_operand, dest_operand))
 		
 	valgrind_operations = valgrind_op_after_resize
@@ -167,6 +167,7 @@ def parse_function(s, loc, toks):
 				else:
 					dest_operand = new_var()
 					signedness_by_var[dest_operand] = 'S'
+					size_by_var[dest_operand] = realsize_by_var.get(var1, size_by_var[var1])
 					
 				add_operation(operation, var1, var2, dest_operand, string)
 				return
@@ -185,17 +186,17 @@ def init_global_vars():
 	cast_signedness_by_var = {}
 	valgrind_operations = []
 	
-def parse_constraint(constraint):
+def parse_constraint_group(constraint_group):
 	global valgrind_operations, size_by_var, offset_by_var, realsize_by_var, shift_by_var
 	
 	init_global_vars()
-
+	
 	lparen = Literal("(")
 	rparen = Literal(")")
 
 	func = Word(alphanums, alphanums+":_")
 	integer = Word(nums)
-
+	
 	expression = Forward()
 
 	arg = expression | func | integer
@@ -204,8 +205,13 @@ def parse_constraint(constraint):
 	expression << func + lparen + args + rparen	
 	expression.setParseAction(parse_function)
 	
-	expression.parseString(constraint)
+	valgrind_operations_group = []	
+	for constraint in constraint_group:
+		valgrind_operations = []
+		
+		expression.parseString(constraint)
+		resize_operands()
+		
+		valgrind_operations_group.append(valgrind_operations)
 	
-	resize_operands()
-	
-	return (valgrind_operations, size_by_var, offset_by_var, realsize_by_var, shift_by_var)
+	return (valgrind_operations_group, size_by_var, offset_by_var, realsize_by_var, shift_by_var)

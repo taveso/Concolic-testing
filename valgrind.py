@@ -1,32 +1,71 @@
 import os
 import subprocess
 import re
+import hashlib
+import base64
 
 valgrind_lib = '/home/fanatic/valgrind-3.8.1/inst/lib/valgrind/'
 valgrind_outfile = 'out.txt'
 
-def run(target):
-	global valgrind_lib, valgrind_outfile
+satisfied_constraints_hashes = set()
+
+def run(target, infile):
+	global valgrind_outfile, valgrind_lib
 	
 	outfile = open(valgrind_outfile, 'w')
 	env = dict(os.environ)
 	env['VALGRIND_LIB'] = valgrind_lib
 	
+	print '\nprocessing %s ...' % infile	
 	subprocess.call([
 		'valgrind',
 		'--tool=fuzzer',
-		target
+		'--fname='+infile,
+		target, 
+		infile
 	], stderr=outfile, env=env)
 	
 	outfile.close()
-	
+
 def parse_outfile():
 	global valgrind_outfile
 
 	with open(valgrind_outfile, 'r') as f:
 		constraints = [m.group(1) for m in (re.match('^branch: (.+)$', line) for line in f) if m]
+	constraints.pop(0)
 	
 	return constraints
+
+def constraint_is_new(constraint):
+	global satisfied_constraints_hashes
+	
+	constraint_hash = hashlib.md5(constraint).hexdigest()
+	
+	if constraint_hash not in satisfied_constraints_hashes:
+		satisfied_constraints_hashes.add(constraint_hash)
+		return True		
+	return False
+
+def create_constraint_groups(constraints):
+	constraint_groups = []
+	satisfied_constraints = []
+	
+	for constraint in constraints:
+		if not re.search('^Not_.+', constraint):
+			satisfied_constraints.append(constraint)
+		else:
+			if constraint_is_new(constraint):
+				tmp = satisfied_constraints[:]
+				tmp.append(constraint)
+				constraint_groups.append(tmp)
+	
+	return constraint_groups
+	
+def get_constraint_groups(target, infile):
+	run(target, infile)
+	constraints = parse_outfile()
+	constraint_groups = create_constraint_groups(constraints)
+	return constraint_groups
 	
 X86Condcode = {
 	2 : 'CmpLTU',
@@ -51,14 +90,9 @@ class Operation:
 		return '%s = %s(%s, %s)' % (self.dest_op, op, self.first_op, self.second_op)
 		
 	def z3_cmp(self, op):
-		return self.z3_cmp_negate(op) if self.dest_op else 's.add(%s %s %s)' % (self.first_op, op, self.second_op)
+		return '%s(%s %s %s)' % ('Not' if self.dest_op else '', self.first_op, op, self.second_op)
 	def z3_cmp_unsigned(self, op):
-		return self.z3_cmp_unsigned_negate(op) if self.dest_op else 's.add(%s(%s, %s))' % (op, self.first_op, self.second_op)
-	
-	def z3_cmp_negate(self, op):
-		return 's.add(Not(%s %s %s))' % (self.first_op, op, self.second_op)
-	def z3_cmp_unsigned_negate(self, op):
-		return 's.add(Not(%s(%s, %s)))' % (op, self.first_op, self.second_op)
+		return '%s(%s(%s, %s))' % ('Not' if self.dest_op else '', op, self.first_op, self.second_op)
 
 	def Add(self):
 		return self.z3_binop('+')

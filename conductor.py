@@ -1,10 +1,11 @@
+from collections import deque
+import time
 import commands
 import struct
 import valgrind
-import parser
 import _z3
 
-test_bin = ''
+new_files_dir = '/tmp'
 test_file = ''
 
 pack_format_by_size = {
@@ -13,44 +14,34 @@ pack_format_by_size = {
 	32 : '<I'
 }
 
-def alter_file(offsets_values_sizes):
-	global test_file, pack_format_by_size
+def generate_new_file(offsets_values_sizes):
+	global new_files_dir, test_file, pack_format_by_size
 	
-	commands.getoutput('echo "AAAAAAAAAAAAAAAA" > %s' % test_file)
+	new_file = '%s/%s-%f' % (new_files_dir, test_file, time.time())
+	commands.getoutput('cp %s %s' % (test_file, new_file))
 
 	for offset, value, size in offsets_values_sizes:
-		print '%s[%d] = %d (%d)' % (test_file, offset, value, size)
+		print '%s[%d] = %d (%d)' % (new_file, offset, value, size)
 		
-		with open(test_file,'r+b') as f:
+		with open(new_file,'r+b') as f:
 			f.seek(offset)			
 			f.write(struct.pack(pack_format_by_size[size], value))
-
-def process_constraint(constraint):
-	global test_bin
-
-	valgrind_operations, size_by_var, offset_by_var, realsize_by_var, shift_by_var = parser.parse_constraint(constraint)
 	
-	_z3.dump(valgrind_operations, size_by_var)
-	offsets_values_sizes = _z3.solve(offset_by_var, size_by_var, realsize_by_var, shift_by_var)
-	
-	alter_file(offsets_values_sizes)
-	print commands.getoutput(test_bin)
-
-def process_constraints(constraints):
-	for constraint in constraints:
-		process_constraint(constraint)
+	return new_file
 
 def lead(target, infile):
-	global test_bin, test_file
+	global new_files_dir, test_file
 	
-	test_bin = target
+	commands.getoutput('mkdir %s' % new_files_dir)	
 	test_file = infile
+	
+	fuzzing_files = deque()
+	fuzzing_files.append(infile)
+	while (fuzzing_files):
+		infile = fuzzing_files.popleft()
 
-	commands.getoutput('echo "AAAAAAAAAAAAAAAA" > %s' % test_file)
-	valgrind.run(target)
-	constraints = valgrind.parse_outfile()
-	'''
-	constraints = ['']
-	'''
-	process_constraints(constraints)
-
+		constraint_groups = valgrind.get_constraint_groups(target, infile)	
+		for constraint_group in constraint_groups:
+			offsets_values_sizes = _z3.solve(constraint_group)
+			if offsets_values_sizes:
+				fuzzing_files.append(generate_new_file(offsets_values_sizes))
