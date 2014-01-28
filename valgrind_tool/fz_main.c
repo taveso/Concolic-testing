@@ -8,6 +8,7 @@
 #include "pub_tool_libcprint.h"     // VG_(printf)
 #include "pub_tool_machine.h"       // VG_(fnptr_to_fnentry)
 #include "pub_tool_libcbase.h"      // VG_(strcmp)
+#include "pub_tool_options.h"
 
 // export VALGRIND_LIB=/home/fanatic/valgrind-3.8.1/inst/lib/valgrind/
 
@@ -1009,7 +1010,8 @@ void instrument_Exit(IRStmt* st, IRSB* sb_out)
 
 #define SYS_READ    3
 #define SYS_OPEN    5
-#define TEST_FILE   "test.txt"
+// #define TEST_FILE   "test.txt"
+static Char* clo_fnname = NULL;
 
 int fd_to_taint = 0;
 
@@ -1052,7 +1054,7 @@ void handle_sys_open(UWord* args, SysRes res)
     {
         pathname = (const char *)args[0];
 
-        if (VG_(strcmp)(pathname, TEST_FILE) == 0)
+        if (VG_(strcmp)(pathname, clo_fnname) == 0)
         {
             VG_(printf)("open(\"%s\", ..) = %lu\n", pathname, res._val);
             fd_to_taint = res._val;
@@ -1080,6 +1082,29 @@ static void post_syscall(ThreadId tId, UInt syscall_number, UWord* args, UInt nA
 //
 //  BASIC TOOL FUNCTIONS
 //
+
+static Bool fz_process_cmd_line_option(Char* arg)
+{
+    if VG_STR_CLO(arg, "--fname", clo_fnname) {}
+
+    tl_assert(clo_fnname);
+    tl_assert(clo_fnname[0]);
+    return True;
+}
+
+static void fz_print_usage(void)
+{
+   VG_(printf)(
+"    --fnname=<filename>           file to taint\n"
+   );
+}
+
+static void fz_print_debug_usage(void)
+{
+   VG_(printf)(
+"    (none)\n"
+   );
+}
 
 static void fz_post_clo_init(void)
 {
@@ -1186,6 +1211,10 @@ static void fz_pre_clo_init(void)
    VG_(basic_tool_funcs)        (fz_post_clo_init,
                                  fz_instrument,
                                  fz_fini);
+
+   VG_(needs_command_line_options)(fz_process_cmd_line_option,
+                                   fz_print_usage,
+                                   fz_print_debug_usage);
 
    VG_(needs_syscall_wrapper)   (pre_syscall, post_syscall);
 
