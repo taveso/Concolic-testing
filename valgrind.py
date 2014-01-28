@@ -49,7 +49,7 @@ def create_constraint_groups(constraints):
 		if constraint_hash not in satisfied_constraints_hashes:
 			tmp = execution_path[:]
 			tmp.append('Not_(%s)'%constraint if taken else constraint)
-			constraint_groups.append(tmp)		
+			constraint_groups.append(tmp)
 			satisfied_constraints_hashes.add(constraint_hash)
 		
 		if taken:
@@ -87,14 +87,14 @@ class Operation:
 		
 	def z3_cmp(self, op):
 		if self.dest_op:
-			return 's.add(Not(%s %s %s))' % (self.first_op, op, self.second_op)
+			return 'Not(%s %s %s)' % (self.first_op, op, self.second_op)
 		else:
-			return 's.add(%s %s %s)' % (self.first_op, op, self.second_op)
+			return '%s %s %s' % (self.first_op, op, self.second_op)
 	def z3_cmp_unsigned(self, op):
 		if self.dest_op:
-			return 's.add(Not(%s(%s, %s)))' % (op, self.first_op, self.second_op)
+			return 'Not(%s(%s, %s))' % (op, self.first_op, self.second_op)
 		else:
-			return 's.add(%s(%s, %s))' % (op, self.first_op, self.second_op)
+			return '%s(%s, %s)' % (op, self.first_op, self.second_op)
 
 	def Add(self):
 		return self.z3_binop('+')

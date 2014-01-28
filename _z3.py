@@ -63,7 +63,7 @@ def translate_valgrind_operations_group(valgrind_operations_group):
 	
 	return z3_operations, z3_constraints
 	
-def dump(valgrind_operations_group, size_by_var):
+def dump(valgrind_operations_group, size_by_var, offset_by_var):
 	global z3_file, z3_prologue, z3_epilogue
 	 
 	z3_operations, z3_constraints = translate_valgrind_operations_group(valgrind_operations_group)
@@ -77,7 +77,13 @@ def dump(valgrind_operations_group, size_by_var):
 		f.write(op+'\n')
 	f.write('\n')
 	for constraint in z3_constraints:
-		f.write(constraint+'\n')
+		f.write('s.add(%s)\n'%constraint)
+	
+	for i, var in enumerate(offset_by_var):
+		for j, var2 in enumerate(offset_by_var):
+			if (i < j) and (offset_by_var[var] == offset_by_var[var2]):
+				f.write('s.add(%s == %s)\n' % (var, var2));
+		
 	f.write(z3_epilogue)
 	f.close()
 	
@@ -99,13 +105,17 @@ def translate_z3_model(offset_by_var, size_by_var, realsize_by_var, shift_by_var
 				
 				if var in shift_by_var:
 					value >>= shift_by_var[var]
-					offset += shift_by_var[var]/8
 					
 				offsets_values_sizes.append((offset, value, size))
 	
 	return offsets_values_sizes
+	
+def correct_offset_by_var(offset_by_var, shift_by_var):
+	for var in shift_by_var:
+		offset_by_var[var] += shift_by_var[var]/8
 			
 def solve(constraint_group):
 	valgrind_operations_group, size_by_var, offset_by_var, realsize_by_var, shift_by_var = parser.parse_constraint_group(constraint_group)
-	dump(valgrind_operations_group, size_by_var)	
+	correct_offset_by_var(offset_by_var, shift_by_var)
+	dump(valgrind_operations_group, size_by_var, offset_by_var)	
 	return translate_z3_model(offset_by_var, size_by_var, realsize_by_var, shift_by_var)
