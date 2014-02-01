@@ -80,15 +80,9 @@ static IRExpr* assignNew_HWord(IRSB* sb_out, IRExpr* expr)
 
 static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt size)
 {
-    if (get_reg_from_offset(offset) == guest_INVALID)
-    {
-        tl_assert(!IRTemp_is_tainted(data));
-        return;
-    }
-
     if (register_is_tainted(offset) != IRTemp_is_tainted(data))
     {
-        flip_register(offset);
+        flip_register(offset, IRTemp_is_tainted(data));
     }
 
     if (IRTemp_is_tainted(data))
@@ -108,7 +102,7 @@ static VG_REGPARM(0) void helper_instrument_PutI(UInt base, UInt ix, UInt bias, 
 {
     UInt index = base+((ix+bias)%nElems);
 
-    tl_assert(get_reg_from_offset(index) == guest_INVALID);
+    // tl_assert(index >= 300);
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, UInt size)
 {
@@ -134,7 +128,7 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_GetI(UInt base, UInt ix, UInt 
 {
     UInt index = base+((ix+bias)%nElems);
 
-    tl_assert(get_reg_from_offset(index) == guest_INVALID);
+    // tl_assert(index >= 300);
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp tmp_lhs, IRTemp tmp_rhs, UInt size)
 {
@@ -436,7 +430,7 @@ static VG_REGPARM(0) void helper_instrument_Exit(UInt branch_is_taken, UInt offs
     {
         if (register_is_tainted(offsIP))
         {
-            flip_register(offsIP);
+            flip_register(offsIP, 0);
 
             free_register_dep(offsIP);
         }
@@ -607,9 +601,11 @@ void instrument_WrTmp_Binop(IRStmt* st, IRSB* sb_out)
             case Ico_U8: arg1_value = arg1->Iex.Const.con->Ico.U8; break;
             case Ico_U16: arg1_value = arg1->Iex.Const.con->Ico.U16; break;
             case Ico_U32: arg1_value = arg1->Iex.Const.con->Ico.U32; break;
+            case Ico_U64: arg1_value = arg1->Iex.Const.con->Ico.U64; break;
             default: VG_(tool_panic)("instrument_WrTmp_Binop");
         }
     }
+
     if (arg2->tag == Iex_Const)
     {
         switch (arg2->Iex.Const.con->tag)
@@ -618,6 +614,7 @@ void instrument_WrTmp_Binop(IRStmt* st, IRSB* sb_out)
             case Ico_U8: arg2_value = arg2->Iex.Const.con->Ico.U8; break;
             case Ico_U16: arg2_value = arg2->Iex.Const.con->Ico.U16; break;
             case Ico_U32: arg2_value = arg2->Iex.Const.con->Ico.U32; break;
+            case Ico_U64: arg2_value = arg2->Iex.Const.con->Ico.U64; break;
             default: VG_(tool_panic)("instrument_WrTmp_Binop");
         }
     }
@@ -1032,10 +1029,7 @@ void handle_sys_read(UWord* args, SysRes res)
 
             for (i = 0; i < res._val; i++)
             {
-                if (!memory_is_tainted(((UInt)buf)+i, 8))
-                {
-                    flip_memory(((UInt)buf)+i, 8, 1);
-                }
+                flip_memory(((UInt)buf)+i, 8, 1);
 
                 char dep[DEP_MAX_LEN] = {0};
                 VG_(snprintf)(dep, DEP_MAX_LEN, "INPUT(%lu)", i);

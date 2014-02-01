@@ -1,4 +1,5 @@
 #include "taint_analysis.h"
+#include "shadow_memory.h"
 #include "pub_tool_libcassert.h"
 #include "pub_tool_machine.h"
 #include "pub_tool_tooliface.h"
@@ -55,13 +56,16 @@ char register_is_tainted(UInt offset)
     return registers[reg].tainted;
 }
 
-void flip_register(UInt offset)
+void flip_register(UInt offset, char val)
 {
     guest_register reg = get_reg_from_offset(offset);
 
-    tl_assert(reg != guest_INVALID);
+    if (val)
+        tl_assert(reg != guest_INVALID);
+    else if (reg == guest_INVALID)
+        return;
 
-    registers[reg].tainted ^= 1;
+    registers[reg].tainted = val;
     // VG_(printf)("flip_register: %d: %d -> %d\n", offset, registers[reg].tainted^1, registers[reg].tainted);
 }
 

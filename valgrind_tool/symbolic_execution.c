@@ -1,4 +1,5 @@
 #include "symbolic_execution.h"
+#include "shadow_memory.h"
 #include "pub_tool_libcprint.h"     // VG_(printf)
 #include "pub_tool_libcbase.h"      // VG_(memset)
 #include "pub_tool_mallocfree.h"    // VG_(malloc) VG_(free)
@@ -182,6 +183,9 @@ char* get_memory_dep(UInt addr, UInt size, char* dep)
 
 void update_memory_dep(UInt addr, char* dep, unsigned int dep_size)
 {
+    if (dep_size > 64)
+        VG_(printf)("dep_size: %d\n", dep_size);
+
     Chunk* chunk = get_chunk_for_writing(addr);
 
     update_dep(&chunk->bytes[addr & 0xffff], dep, dep_size);
@@ -233,7 +237,8 @@ void update_register_dep(UInt offset, UInt size, char* dep)
 void free_register_dep(UInt offset)
 {
     guest_register reg = get_reg_from_offset(offset);
-    tl_assert(reg != guest_INVALID);
+    if (reg != guest_INVALID)
+        return;
 
     free_dep(&registers[reg]);
 }
