@@ -18,6 +18,6 @@ void flip_register(UInt offset, char val);
 
 char temporary_is_tainted(IRTemp tmp);
 char IRTemp_is_tainted(IRTemp tmp);
-void flip_temporary(IRTemp tmp);
+void flip_temporary(IRTemp tmp, char val);
 
 #endif // TAINT_ANALYSIS_H

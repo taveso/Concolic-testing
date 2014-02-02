@@ -80,100 +80,83 @@ static IRExpr* assignNew_HWord(IRSB* sb_out, IRExpr* expr)
 
 static VG_REGPARM(0) void helper_instrument_Put(UInt offset, IRTemp data, UInt size)
 {
-    if (register_is_tainted(offset) != IRTemp_is_tainted(data))
-    {
-        flip_register(offset, IRTemp_is_tainted(data));
-    }
-
     if (IRTemp_is_tainted(data))
     {
+        flip_register(offset, 1);
+
         char dep[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "PUT(%s)", get_temporary_dep(data));
-
         update_register_dep(offset, size, dep);
     }
     else
     {
+        flip_register(offset, 0);
+
         free_register_dep(offset);
     }
 }
 static VG_REGPARM(0) void helper_instrument_PutI(UInt base, UInt ix, UInt bias, UInt nElems)
 {
     UInt index = base+((ix+bias)%nElems);
-
     // tl_assert(index >= 300);
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Get(IRTemp tmp, UInt offset, UInt size)
 {
-    if (temporary_is_tainted(tmp) != register_is_tainted(offset))
-    {
-        flip_temporary(tmp);
-    }
-
     if (register_is_tainted(offset))
     {
+        flip_temporary(tmp, 1);
+
         char dep[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "GET(%s)", get_register_dep(offset));
-
         update_temporary_dep(tmp, dep, size);
     }
     else
     {
+        flip_temporary(tmp, 0);
+
         free_temporary_dep(tmp);
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_GetI(UInt base, UInt ix, UInt bias, UInt nElems)
 {
     UInt index = base+((ix+bias)%nElems);
-
     // tl_assert(index >= 300);
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_RdTmp(IRTemp tmp_lhs, IRTemp tmp_rhs, UInt size)
 {
-    if (temporary_is_tainted(tmp_lhs) != temporary_is_tainted(tmp_rhs))
-    {
-        flip_temporary(tmp_lhs);
-    }
-
     if (temporary_is_tainted(tmp_rhs))
     {
+        flip_temporary(tmp_lhs, 1);
+
         char dep[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "RdTmp(%s)", get_temporary_dep(tmp_rhs));
-
         update_temporary_dep(tmp_lhs, dep, size);
     }
     else
     {
+        flip_temporary(tmp_lhs, 0);
+
         free_temporary_dep(tmp_lhs);
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1, IRTemp arg2, UInt op, UInt size, UInt arg1_value, UInt arg2_value)
 {
-    if (temporary_is_tainted(tmp) != (IRTemp_is_tainted(arg1) || IRTemp_is_tainted(arg2)))
-    {
-        flip_temporary(tmp);
-    }
-
     if (IRTemp_is_tainted(arg1) || IRTemp_is_tainted(arg2))
     {
+        flip_temporary(tmp, 1);
+
         char str[32] = {0};
         char dep[DEP_MAX_LEN] = {0};
 
         IROp_to_str(op, str);
 
-        if (!IRTemp_is_tainted(arg1))
-        {
+        if (!IRTemp_is_tainted(arg1)) {
             VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%u,%s)", str, arg1_value, get_temporary_dep(arg2));
         }
-        else if (!IRTemp_is_tainted(arg2))
-        {
+        else if (!IRTemp_is_tainted(arg2)) {
             VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s,%u)", str, get_temporary_dep(arg1), arg2_value);
         }
-        else
-        {
+        else {
             VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s,%s)", str, get_temporary_dep(arg1), get_temporary_dep(arg2));
         }
 
@@ -181,50 +164,47 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Binop(IRTemp tmp, IRTemp arg1,
     }
     else
     {
+        flip_temporary(tmp, 0);
+
         free_temporary_dep(tmp);
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Unop(IRTemp tmp, IRTemp arg, UInt op, UInt size)
 {
-    if (temporary_is_tainted(tmp) != IRTemp_is_tainted(arg))
-    {
-        flip_temporary(tmp);
-    }
-
     if (IRTemp_is_tainted(arg))
     {
+        flip_temporary(tmp, 1);
+
         char str[32] = {0};
         char dep[DEP_MAX_LEN] = {0};
 
         IROp_to_str(op, str);
 
         VG_(snprintf)(dep, DEP_MAX_LEN, "%s(%s)", str, get_temporary_dep(arg));
-
         update_temporary_dep(tmp, dep, size);
     }
     else
     {
+        flip_temporary(tmp, 0);
+
         free_temporary_dep(tmp);
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_Load(IRTemp tmp, UInt addr, UInt size)
 {
-    if (temporary_is_tainted(tmp) != memory_is_tainted(addr, size))
-    {
-        flip_temporary(tmp);
-    }
-
     if (memory_is_tainted(addr, size))
     {
+        flip_temporary(tmp, 1);
+
         char dep[DEP_MAX_LEN] = {0};
         char dep_rhs[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "LDle:%d(%s)", size, get_memory_dep(addr, size, dep_rhs));
-
         update_temporary_dep(tmp, dep, size);
     }
     else
     {
+        flip_temporary(tmp, 0);
+
         free_temporary_dep(tmp);
     }
 }
@@ -232,32 +212,26 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Const(IRTemp tmp)
 {
     if (temporary_is_tainted(tmp))
     {
-        flip_temporary(tmp);
+        flip_temporary(tmp, 0);
 
         free_temporary_dep(tmp);
     }
 }
 static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition(IRTemp tmp, IRTemp cc_dep1, IRTemp cc_dep2, UInt cond, UInt cc_op_value, UInt cc_dep1_value, UInt cc_dep2_value)
 {
-    if (temporary_is_tainted(tmp) != (IRTemp_is_tainted(cc_dep1) || IRTemp_is_tainted(cc_dep2)))
-    {
-        flip_temporary(tmp);
-    }
-
     if (IRTemp_is_tainted(cc_dep1) || IRTemp_is_tainted(cc_dep2))
     {
+        flip_temporary(tmp, 1);
+
         char dep[DEP_MAX_LEN] = {0};
 
-        if (!IRTemp_is_tainted(cc_dep1))
-        {
+        if (!IRTemp_is_tainted(cc_dep1)) {
             VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %u, %s)", cond, cc_op_value, cc_dep1_value, get_temporary_dep(cc_dep2));
         }
-        else if (!IRTemp_is_tainted(cc_dep2))
-        {
+        else if (!IRTemp_is_tainted(cc_dep2)) {
             VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %u)", cond, cc_op_value, get_temporary_dep(cc_dep1), cc_dep2_value);
         }
-        else
-        {
+        else {
             VG_(snprintf)(dep, DEP_MAX_LEN, "x86g_calculate_condition(%u, %u, %s, %s)", cond, cc_op_value, get_temporary_dep(cc_dep1), get_temporary_dep(cc_dep2));
         }
 
@@ -265,6 +239,8 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_CCall_x86g_calculate_condition
     }
     else
     {
+        flip_temporary(tmp, 0);
+
         free_temporary_dep(tmp);
     }
 }
@@ -276,41 +252,35 @@ static VG_REGPARM(0) void helper_instrument_WrTmp_Mux0X(IRTemp tmp, UInt cond, I
 {
     char expr_is_tainted = (cond == 0) ? IRTemp_is_tainted(expr0) : IRTemp_is_tainted(exprX);
 
-    if (temporary_is_tainted(tmp) != expr_is_tainted)
-    {
-        flip_temporary(tmp);
-    }
-
     if (expr_is_tainted)
     {
+        flip_temporary(tmp, 1);
+
         char dep[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "Mux0X(%s)", (cond == 0 ? get_temporary_dep(expr0) : get_temporary_dep(exprX)));
-
         update_temporary_dep(tmp, dep, size);
     }
     else
     {
+        flip_temporary(tmp, 0);
+
         free_temporary_dep(tmp);
     }
 }
 static VG_REGPARM(0) void helper_instrument_Store(UInt addr, IRTemp data, UInt size)
 {
-    if (memory_is_tainted(addr, size) != IRTemp_is_tainted(data))
-    {
-        flip_memory(addr, size, IRTemp_is_tainted(data));
-    }
-
     if (IRTemp_is_tainted(data))
     {
+        flip_memory(addr, size, 1);
+
         char dep[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "STle(%s)", get_temporary_dep(data));
-
         update_memory_dep(addr, dep, size);
     }
     else
     {
+        flip_memory(addr, size, 0);
+
         free_memory_dep(addr, size);
     }
 }
@@ -318,21 +288,18 @@ static VG_REGPARM(0) void helper_instrument_CAS_single_element(UInt addr, IRTemp
 {
     if (cas_succeeded)
     {
-        if (memory_is_tainted(addr, size) != IRTemp_is_tainted(dataLo))
-        {
-            flip_memory(addr, size, IRTemp_is_tainted(dataLo));
-        }
-
         if (IRTemp_is_tainted(dataLo))
         {
+            flip_memory(addr, size, 1);
+
             char dep[DEP_MAX_LEN] = {0};
-
             VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_dep(dataLo));
-
             update_memory_dep(addr, dep, size);
         }
         else
         {
+            flip_memory(addr, size, 0);
+
             free_memory_dep(addr, size);
         }
     }
@@ -343,61 +310,52 @@ static VG_REGPARM(0) void helper_instrument_CAS_double_element(UInt addr, IRTemp
 
     if (cas_succeeded)
     {
-        if (memory_is_tainted(addr, size) != IRTemp_is_tainted(dataLo))
-        {
-            flip_memory(addr, size, IRTemp_is_tainted(dataLo));
-        }
-
-        if (memory_is_tainted(addr+size, size) != IRTemp_is_tainted(dataHi))
-        {
-            flip_memory(addr+size, size, IRTemp_is_tainted(dataHi));
-        }
-
         if (IRTemp_is_tainted(dataLo))
         {
+            flip_memory(addr, size, 1);
+
             char dep[DEP_MAX_LEN] = {0};
-
             VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_dep(dataLo));
-
             update_memory_dep(addr, dep, size);
         }
         else
         {
+            flip_memory(addr, size, 0);
+
             free_memory_dep(addr, size);
         }
 
         if (IRTemp_is_tainted(dataHi))
         {
+            flip_memory(addr+size, size, 1);
+
             char dep[DEP_MAX_LEN] = {0};
-
             VG_(snprintf)(dep, DEP_MAX_LEN, "CASle(%s)", get_temporary_dep(dataHi));
-
             update_memory_dep(addr+size, dep, size);
         }
         else
         {
+            flip_memory(addr+size, size, 0);
+
             free_memory_dep(addr+size, size);
         }
     }
 }
 static VG_REGPARM(0) void helper_instrument_LLSC_Load_Linked(IRTemp result, UInt addr, UInt size)
 {
-    if (temporary_is_tainted(result) != memory_is_tainted(addr, size))
-    {
-        flip_temporary(result);
-    }
-
     if (memory_is_tainted(addr, size))
     {
+        flip_temporary(result, 1);
+
         char dep[DEP_MAX_LEN] = {0};
         char dep_rhs[DEP_MAX_LEN] = {0};
-
         VG_(snprintf)(dep, DEP_MAX_LEN, "LDle-Linked(%s)", get_memory_dep(addr, size, dep_rhs));
-
         update_temporary_dep(result, dep, size);
     }
     else
     {
+        flip_temporary(result, 0);
+
         free_temporary_dep(result);
     }
 }
@@ -405,21 +363,18 @@ static VG_REGPARM(0) void helper_instrument_LLSC_Store_Conditional(UInt addr, IR
 {
     if (store_succeeded)
     {
-        if (memory_is_tainted(addr, size) != IRTemp_is_tainted(storedata))
-        {
-            flip_memory(addr, size, IRTemp_is_tainted(storedata));
-        }
-
         if (IRTemp_is_tainted(storedata))
         {
+            flip_memory(addr, size, 1);
+
             char dep[DEP_MAX_LEN] = {0};
-
             VG_(snprintf)(dep, DEP_MAX_LEN, "STle-Cond(%s)", get_temporary_dep(storedata));
-
             update_memory_dep(addr, dep, size);
         }
         else
         {
+            flip_memory(addr, size, 0);
+
             free_memory_dep(addr, size);
         }
     }
@@ -454,7 +409,7 @@ static VG_REGPARM(0) void helper_instrument_superblock()
     {
         if (temporary_is_tainted(i))
         {
-            flip_temporary(i);
+            flip_temporary(i, 0);
             free_temporary_dep(i);
         }
     }
