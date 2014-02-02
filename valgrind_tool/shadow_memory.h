@@ -25,7 +25,7 @@ typedef struct {
 #define CHUNK_SIZE	65536
 
 typedef struct {
-    Shadow bytes[CHUNK_SIZE];
+    Shadow* bytes[CHUNK_SIZE];
 } Chunk;
 
 Chunk* MemoryMap[MMAP_SIZE]; // designed for a 32-bit (4GB) address space (4Go = 4194304Ko = 64Ko*65536 = 65536o*65536)

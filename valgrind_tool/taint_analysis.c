@@ -11,6 +11,7 @@
 char memory_is_tainted(UInt addr, UInt size)
 {
     Chunk* chunk;
+    Shadow* shadow;
     int i;
 
     for (i = 0; i < size/8; i++)
@@ -19,7 +20,11 @@ char memory_is_tainted(UInt addr, UInt size)
         if (chunk == NULL)
             continue;
 
-        if (chunk->bytes[(addr+i) & 0xffff].tainted) {
+        shadow = chunk->bytes[(addr+i) & 0xffff];
+        if (shadow == NULL)
+            continue;
+
+        if (shadow->tainted) {
             return 1;
         }
     }
@@ -30,13 +35,18 @@ char memory_is_tainted(UInt addr, UInt size)
 void flip_memory(UInt addr, UInt size, char val)
 {
     Chunk* chunk;
+    Shadow* shadow;
     int i;
 
     for (i = 0; i < size/8; i++)
     {
         chunk = get_chunk_for_writing(addr+i);
 
-        chunk->bytes[(addr+i) & 0xffff].tainted = val;
+        shadow = chunk->bytes[(addr+i) & 0xffff];
+        if (shadow == NULL)
+            shadow = VG_(malloc)("", sizeof(Shadow));
+
+        shadow->tainted = val;
         // VG_(printf)("flip_memory: 0x%08x: %d -> %d (8)\n", addr, chunk->bytes[(addr+i) & 0xffff].tainted^1, chunk->bytes[(addr+i) & 0xffff].tainted);
     }
 }
@@ -88,10 +98,10 @@ char IRTemp_is_tainted(IRTemp tmp)
         return temporary_is_tainted(tmp);
 }
 
-void flip_temporary(IRTemp tmp)
+void flip_temporary(IRTemp tmp, char val)
 {
     tl_assert(tmp < MAX_TEMPORARIES);
 
-    shadowTempArray[tmp].tainted ^= 1;
+    shadowTempArray[tmp].tainted = val;
     // VG_(printf)("flip_temporary: %d: %d -> %d\n", tmp, shadowTempArray[tmp].tainted^1, shadowTempArray[tmp].tainted);
 }

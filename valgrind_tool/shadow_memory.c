@@ -15,20 +15,29 @@ void init_shadow_memory(void)
 
 void destroy_shadow_memory(void)
 {
+    Chunk* chunk;
+    Shadow* shadow;
     unsigned int i, j;
 
     for (i = 0; i < MMAP_SIZE; i++)
     {
-        if (MemoryMap[i] != NULL)
+        chunk = MemoryMap[i];
+        if (chunk != NULL)
         {
             for (j = 0; j < CHUNK_SIZE; j++)
             {
-                if (MemoryMap[i]->bytes[j].buffer != NULL) {
-                    VG_(free)(MemoryMap[i]->bytes[j].buffer);
+                shadow = chunk->bytes[j];
+                if (shadow != NULL)
+                {
+                    if (shadow->buffer != NULL) {
+                        VG_(free)(shadow->buffer);
+                    }
+
+                    VG_(free)(shadow);
                 }
             }
 
-            VG_(free)(MemoryMap[i]);
+            VG_(free)(chunk);
         }
     }
 }
@@ -44,15 +53,15 @@ Chunk* get_chunk_for_reading(UInt addr)
 
 Chunk* get_chunk_for_writing(UInt addr)
 {
-    UInt x = (addr >> 16) & 0xffff;
+    Chunk* chunk = get_chunk_for_reading(addr);
 
-    if (MemoryMap[x] == NULL)
+    if (chunk == NULL)
     {
-        MemoryMap[x] = VG_(malloc)("", sizeof(Chunk));
-        VG_(memset)(MemoryMap[x], 0, sizeof(Chunk));
+        chunk = VG_(malloc)("", sizeof(Chunk));
+        VG_(memset)(chunk, 0, sizeof(Chunk));
     }
 
-    return MemoryMap[x];
+    return chunk;
 }
 
 //

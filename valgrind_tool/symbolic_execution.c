@@ -21,10 +21,8 @@ void update_dep(Shadow* shadow, char* dep, unsigned int dep_size)
 
 void free_dep(Shadow* shadow)
 {
-    if (shadow->buffer != NULL)
-    {
+    if (shadow->buffer != NULL) {
         VG_(free)(shadow->buffer);
-
         shadow->buffer = NULL;
     }
 
@@ -35,141 +33,47 @@ void free_dep(Shadow* shadow)
 //  MEMORY
 //
 
-Shadow* get_byte_shadow(UInt addr)
-{
-    Chunk* chunk = get_chunk_for_reading(addr);
-
-    if (chunk == NULL)
-        return NULL;
-
-    return &chunk->bytes[addr & 0xffff];
-}
-
 char* get_memory_dep(UInt addr, UInt size, char* dep)
 {
-    int i;
+    Chunk* chunk;
     Shadow* shadow;
+    int i;
 
     for (i = 0; i < DEP_MAX_SIZE/8; i++)
     {
-        shadow = get_byte_shadow(addr-i);
-
-        if (shadow == NULL || shadow->buffer == NULL)
+        chunk = get_chunk_for_reading(addr-i);
+        if (chunk == NULL)
             continue;
 
-        if (size == 8)
+        shadow = chunk->bytes[addr & 0xffff];
+        if (shadow == NULL)
+            continue;
+
+        switch (shadow->size)
         {
-            switch (shadow->size)
-            {
-                case 8:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    break;
-                case 16:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar16_(%s,8)", shadow->buffer); }
-                    break;
-                case 32:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,8)", shadow->buffer); }
-                    else if (i == 2) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,16)", shadow->buffer); }
-                    else if (i == 3) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,24)", shadow->buffer); }
-                    break;
-                case 64:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,8)", shadow->buffer); }
-                    else if (i == 2) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,16)", shadow->buffer); }
-                    else if (i == 3) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,24)", shadow->buffer); }
-                    else if (i == 4) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,32)", shadow->buffer); }
-                    else if (i == 5) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,40)", shadow->buffer); }
-                    else if (i == 6) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,48)", shadow->buffer); }
-                    else if (i == 7) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,56)", shadow->buffer); }
-                    break;
-            }
-        }
-        else if (size == 16)
-        {
-            switch (shadow->size)
-            {
-                case 8:
-                     if     (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                     break;
-                case 16:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar16_(%s,8)", shadow->buffer); }
-                    break;
-                case 32:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,8)", shadow->buffer); }
-                    else if (i == 2) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,16)", shadow->buffer); }
-                    else if (i == 3) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,24)", shadow->buffer); }
-                    break;
-                case 64:
-                    if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,8)", shadow->buffer); }
-                    else if (i == 2) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,16)", shadow->buffer); }
-                    else if (i == 3) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,24)", shadow->buffer); }
-                    else if (i == 4) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,32)", shadow->buffer); }
-                    else if (i == 5) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,40)", shadow->buffer); }
-                    else if (i == 6) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,48)", shadow->buffer); }
-                    else if (i == 7) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,56)", shadow->buffer); }
-                    break;
-            }
-        }
-        else if (size == 32)
-        {
-            switch (shadow->size)
-            {
-                case 8:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                case 16:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar16_(%s,8)", shadow->buffer); }
-                    break;
-                case 32:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,8)", shadow->buffer); }
-                    else if (i == 2)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,16)", shadow->buffer); }
-                    else if (i == 3)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,24)", shadow->buffer); }
-                    break;
-                case 64:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,8)", shadow->buffer); }
-                    else if (i == 2)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,16)", shadow->buffer); }
-                    else if (i == 3)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,24)", shadow->buffer); }
-                    else if (i == 4)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,32)", shadow->buffer); }
-                    else if (i == 5)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,40)", shadow->buffer); }
-                    else if (i == 6)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,48)", shadow->buffer); }
-                    else if (i == 7)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,56)", shadow->buffer); }
-                    break;
-            }
-        }
-        else if (size == 64)
-        {
-            switch (shadow->size)
-            {
-                case 8:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                case 16:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar16_(%s,8)", shadow->buffer); }
-                    break;
-                case 32:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,8)", shadow->buffer); }
-                    else if (i == 2)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,16)", shadow->buffer); }
-                    else if (i == 3)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,24)", shadow->buffer); }
-                    break;
-                case 64:
-                    if      (i == 0)  { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
-                    else if (i == 1)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,8)", shadow->buffer); }
-                    else if (i == 2)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,16)", shadow->buffer); }
-                    else if (i == 3)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,24)", shadow->buffer); }
-                    else if (i == 4)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,32)", shadow->buffer); }
-                    else if (i == 5)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,40)", shadow->buffer); }
-                    else if (i == 6)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,48)", shadow->buffer); }
-                    else if (i == 7)  { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,56)", shadow->buffer); }
-                    break;
-            }
+            case 8:
+                if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
+                break;
+            case 16:
+                if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
+                else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar16_(%s,8)", shadow->buffer); }
+                break;
+            case 32:
+                if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
+                else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,8)", shadow->buffer); }
+                else if (i == 2) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,16)", shadow->buffer); }
+                else if (i == 3) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar32_(%s,24)", shadow->buffer); }
+                break;
+            case 64:
+                if      (i == 0) { VG_(snprintf)(dep, DEP_MAX_LEN, "%s", shadow->buffer); }
+                else if (i == 1) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,8)", shadow->buffer); }
+                else if (i == 2) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,16)", shadow->buffer); }
+                else if (i == 3) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,24)", shadow->buffer); }
+                else if (i == 4) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,32)", shadow->buffer); }
+                else if (i == 5) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,40)", shadow->buffer); }
+                else if (i == 6) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,48)", shadow->buffer); }
+                else if (i == 7) { VG_(snprintf)(dep, DEP_MAX_LEN, "Sar64_(%s,56)", shadow->buffer); }
+                break;
         }
 
         if (dep[0] != '\0') {
@@ -183,12 +87,15 @@ char* get_memory_dep(UInt addr, UInt size, char* dep)
 
 void update_memory_dep(UInt addr, char* dep, unsigned int dep_size)
 {
-    if (dep_size > 64)
-        VG_(printf)("dep_size: %d\n", dep_size);
-
     Chunk* chunk = get_chunk_for_writing(addr);
 
-    update_dep(&chunk->bytes[addr & 0xffff], dep, dep_size);
+    Shadow* shadow = chunk->bytes[addr & 0xffff];
+    if (shadow == NULL) {
+        VG_(malloc)("", sizeof(Shadow));
+        VG_(memset)(shadow, 0, sizeof(Shadow));
+    }
+
+    update_dep(shadow, dep, dep_size);
 
     free_memory_dep(addr+1, dep_size-8);
 }
@@ -196,6 +103,7 @@ void update_memory_dep(UInt addr, char* dep, unsigned int dep_size)
 void free_memory_dep(UInt addr, UInt size)
 {
     Chunk* chunk;
+    Shadow* shadow;
     int i;
 
     for (i = 0; i < size/8; i++)
@@ -204,7 +112,16 @@ void free_memory_dep(UInt addr, UInt size)
         if (chunk == NULL)
             continue;
 
-        free_dep(&chunk->bytes[(addr+i) & 0xffff]);
+        shadow = chunk->bytes[(addr+i) & 0xffff];
+        if (shadow == NULL)
+            continue;
+
+        if (shadow->size > (size-(i*8)))
+            VG_(tool_panic)("shadow->size > (size-(i*8))");
+
+        free_dep(shadow);
+        VG_(free)(shadow);
+        shadow = NULL;
     }
 }
 
