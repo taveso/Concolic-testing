@@ -53,15 +53,15 @@ Chunk* get_chunk_for_reading(UInt addr)
 
 Chunk* get_chunk_for_writing(UInt addr)
 {
-    Chunk* chunk = get_chunk_for_reading(addr);
+    UInt x = (addr >> 16) & 0xffff;
 
-    if (chunk == NULL)
+    if (MemoryMap[x] == NULL)
     {
-        chunk = VG_(malloc)("", sizeof(Chunk));
-        VG_(memset)(chunk, 0, sizeof(Chunk));
+        MemoryMap[x] = VG_(malloc)("", sizeof(Chunk));
+        VG_(memset)(MemoryMap[x], 0, sizeof(Chunk));
     }
 
-    return chunk;
+    return MemoryMap[x];
 }
 
 //

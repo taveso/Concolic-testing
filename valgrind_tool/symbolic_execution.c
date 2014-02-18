@@ -1,5 +1,4 @@
 #include "symbolic_execution.h"
-#include "shadow_memory.h"
 #include "pub_tool_libcprint.h"     // VG_(printf)
 #include "pub_tool_libcbase.h"      // VG_(memset)
 #include "pub_tool_mallocfree.h"    // VG_(malloc) VG_(free)
@@ -35,9 +34,9 @@ void free_dep(Shadow* shadow)
 
 char* get_memory_dep(UInt addr, UInt size, char* dep)
 {
+    int i;
     Chunk* chunk;
     Shadow* shadow;
-    int i;
 
     for (i = 0; i < DEP_MAX_SIZE/8; i++)
     {
@@ -45,8 +44,8 @@ char* get_memory_dep(UInt addr, UInt size, char* dep)
         if (chunk == NULL)
             continue;
 
-        shadow = chunk->bytes[addr & 0xffff];
-        if (shadow == NULL)
+        shadow = chunk->bytes[(addr-i) & 0xffff];
+        if (shadow == NULL || shadow->buffer == NULL)
             continue;
 
         switch (shadow->size)
@@ -87,13 +86,13 @@ char* get_memory_dep(UInt addr, UInt size, char* dep)
 
 void update_memory_dep(UInt addr, char* dep, unsigned int dep_size)
 {
-    Chunk* chunk = get_chunk_for_writing(addr);
+    Chunk* chunk;
+    Shadow* shadow;
 
-    Shadow* shadow = chunk->bytes[addr & 0xffff];
-    if (shadow == NULL) {
-        VG_(malloc)("", sizeof(Shadow));
-        VG_(memset)(shadow, 0, sizeof(Shadow));
-    }
+    chunk = get_chunk_for_writing(addr);
+
+    shadow = chunk->bytes[addr & 0xffff];
+    tl_assert(shadow != NULL);
 
     update_dep(shadow, dep, dep_size);
 
@@ -116,12 +115,7 @@ void free_memory_dep(UInt addr, UInt size)
         if (shadow == NULL)
             continue;
 
-        if (shadow->size > (size-(i*8)))
-            VG_(tool_panic)("shadow->size > (size-(i*8))");
-
         free_dep(shadow);
-        VG_(free)(shadow);
-        shadow = NULL;
     }
 }
 
@@ -154,8 +148,7 @@ void update_register_dep(UInt offset, UInt size, char* dep)
 void free_register_dep(UInt offset)
 {
     guest_register reg = get_reg_from_offset(offset);
-    if (reg != guest_INVALID)
-        return;
+    tl_assert(reg != guest_INVALID);
 
     free_dep(&registers[reg]);
 }

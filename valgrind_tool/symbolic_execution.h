@@ -1,6 +1,7 @@
 #ifndef _SYMBOLIC_EXECUTION_H
 #define _SYMBOLIC_EXECUTION_H
 
+#include "shadow_memory.h"
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
 

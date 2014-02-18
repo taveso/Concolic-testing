@@ -1,6 +1,7 @@
 #ifndef _TAINT_ANALYSIS_H
 #define _TAINT_ANALYSIS_H
 
+#include "shadow_memory.h"
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
 
@@ -18,6 +19,6 @@ void flip_register(UInt offset, char val);
 
 char temporary_is_tainted(IRTemp tmp);
 char IRTemp_is_tainted(IRTemp tmp);
-void flip_temporary(IRTemp tmp, char val);
+void flip_temporary(IRTemp tmp);
 
 #endif // TAINT_ANALYSIS_H
